@@ -1,0 +1,38 @@
+package security
+
+import (
+	"banking-app-be/components/errors"
+	"banking-app-be/components/web"
+	"fmt"
+	"net/http"
+)
+
+func MiddlewareAdmin(next http.Handler) http.Handler {
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		claim := Claims{}
+
+		err := ValidateToken(w, r, &claim)
+		if err != nil {
+			fmt.Println("err=> ", err)
+			web.RespondError(w, errors.NewValidationError("Invalid or missing token"))
+			return
+		}
+
+		if !claim.IsAdmin {
+			fmt.Println("User is not Admin")
+			web.RespondError(w, errors.NewUnauthorizedError("Current user not an admin"))
+			return
+		}
+
+		if !claim.IsActive {
+			fmt.Println("User is not Active")
+			web.RespondError(w, errors.NewInActiveUserError("current user is not active"))
+			return
+		}
+
+		next.ServeHTTP(w, r)
+
+	})
+}

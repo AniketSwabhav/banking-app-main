@@ -4,7 +4,7 @@ import "regexp"
 
 // ValidateString validates if string is valid and there is no space in it
 func ValidateString(name string) bool {
-	stringPattern := regexp.MustCompile("^[a-zA-Z]*$")
+	stringPattern := regexp.MustCompile("^[A-Za-z .'-]+$")
 	return stringPattern.MatchString(name)
 }
 

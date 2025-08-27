@@ -38,14 +38,14 @@ func (userController *UserController) RegisterRoutes(router *mux.Router) {
 	unguardedRouter.HandleFunc("/register-admin", userController.registerAdmin).Methods(http.MethodPost)
 	guardedRouter.HandleFunc("/register-user", userController.registerUser).Methods(http.MethodPost)
 
-	// //Get
+	// Get
 	guardedRouter.HandleFunc("/", userController.getAllUsers).Methods(http.MethodGet)
 	guardedRouter.HandleFunc("/{id}", userController.getUserById).Methods(http.MethodGet)
 
 	//Update
 	guardedRouter.HandleFunc("/{id}", userController.updateUserById).Methods(http.MethodPut)
 
-	// //Delete
+	// Delete
 	guardedRouter.HandleFunc("/{id}", userController.deleteUserById).Methods(http.MethodDelete)
 
 	guardedRouter.Use(security.MiddlewareAdmin)
@@ -157,7 +157,7 @@ func (controller *UserController) getAllUsers(w http.ResponseWriter, r *http.Req
 	web.RespondJSONWithXTotalCount(w, http.StatusOK, totalCount, allUsers)
 }
 
-func (c *UserController) getUserById(w http.ResponseWriter, r *http.Request) {
+func (controller *UserController) getUserById(w http.ResponseWriter, r *http.Request) {
 
 	var targetUser = &user.UserDTO{}
 
@@ -171,7 +171,7 @@ func (c *UserController) getUserById(w http.ResponseWriter, r *http.Request) {
 
 	targetUser.ID = userIdFromURL
 
-	err = c.UserService.GetUserByID(targetUser)
+	err = controller.UserService.GetUserByID(targetUser)
 	if err != nil {
 		web.RespondError(w, err)
 		return
@@ -180,7 +180,7 @@ func (c *UserController) getUserById(w http.ResponseWriter, r *http.Request) {
 	web.RespondJSON(w, http.StatusOK, targetUser)
 }
 
-func (c *UserController) updateUserById(w http.ResponseWriter, r *http.Request) {
+func (controller *UserController) updateUserById(w http.ResponseWriter, r *http.Request) {
 
 	var userToUpdate = user.User{}
 
@@ -192,6 +192,13 @@ func (c *UserController) updateUserById(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	userToUpdate.UpdatedBy, err = security.ExtractUserIDFromToken(r)
+	if err != nil {
+		controller.log.Error(err.Error())
+		web.RespondError(w, err)
+		return
+	}
+
 	userIdFromURL, err := parser.GetUUID("id")
 	if err != nil {
 		web.RespondError(w, errors.NewValidationError("Invalid user ID format"))
@@ -200,17 +207,25 @@ func (c *UserController) updateUserById(w http.ResponseWriter, r *http.Request) 
 
 	userToUpdate.ID = userIdFromURL
 
-	err = c.UserService.UpdateUser(&userToUpdate)
+	err = controller.UserService.UpdateUser(&userToUpdate)
 	if err != nil {
-		c.log.Print(err.Error())
+		controller.log.Print(err.Error())
 		web.RespondError(w, err)
 		return
 	}
 
-	web.RespondJSON(w, http.StatusOK, userToUpdate)
+	updatedUser := user.UserDTO{}
+	updatedUser.ID = userToUpdate.ID
+	err = controller.UserService.GetUserByID(&updatedUser)
+	if err != nil {
+		web.RespondError(w, err)
+		return
+	}
+
+	web.RespondJSON(w, http.StatusOK, updatedUser)
 }
 
-func (c *UserController) deleteUserById(w http.ResponseWriter, r *http.Request) {
+func (controller *UserController) deleteUserById(w http.ResponseWriter, r *http.Request) {
 
 	userToDelete := user.User{}
 
@@ -222,11 +237,18 @@ func (c *UserController) deleteUserById(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	userToDelete.DeletedBy, err = security.ExtractUserIDFromToken(r)
+	if err != nil {
+		controller.log.Error(err.Error())
+		web.RespondError(w, err)
+		return
+	}
+
 	userToDelete.ID = userIdFromURL
 
-	err = c.UserService.Delete(&userToDelete)
+	err = controller.UserService.Delete(&userToDelete)
 	if err != nil {
-		c.log.Print(err.Error())
+		controller.log.Print(err.Error())
 		web.RespondError(w, err)
 		return
 	}

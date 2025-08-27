@@ -191,21 +191,53 @@ func (service *UserService) UpdateUser(userToUpdate *user.User) error {
 	uow := repository.NewUnitOfWork(service.db, false)
 	defer uow.RollBack()
 
-	tempUser := user.User{}
-
-	err = service.repository.GetRecordByID(uow, userToUpdate.ID, &tempUser, repository.Select("`created_at`"),
-		repository.Filter("`id` = ?", userToUpdate.ID))
-	if err != nil {
+	existingUser := user.User{}
+	if err := service.repository.GetRecordByID(uow, userToUpdate.ID, &existingUser); err != nil {
 		return err
 	}
 
-	err = service.repository.UpdateWithMap(uow, userToUpdate, map[string]interface{}{
+	if err := service.repository.UpdateWithMap(uow, &user.User{}, map[string]interface{}{
 		"first_name": userToUpdate.FirstName,
 		"last_name":  userToUpdate.LastName,
 		"phone_no":   userToUpdate.PhoneNo,
 		"is_admin":   userToUpdate.IsAdmin,
 		"is_active":  userToUpdate.IsActive,
-	})
+		"updated_by": userToUpdate.UpdatedBy,
+		"updated_at": time.Now(),
+	}, repository.Filter("id = ?", userToUpdate.ID)); err != nil {
+		uow.RollBack()
+		return err
+	}
+
+	if userToUpdate.Credentials != nil {
+		cred := userToUpdate.Credentials
+
+		if err := cred.Validate(); err != nil {
+			uow.RollBack()
+			return err
+		}
+
+		var updateData = map[string]interface{}{
+			"email":      cred.Email,
+			"updated_by": userToUpdate.UpdatedBy,
+			"updated_at": time.Now(),
+		}
+
+		if cred.Password != "" {
+			hashedPassword, err := hashPassword(cred.Password)
+			if err != nil {
+				uow.RollBack()
+				return errors.NewValidationError("Failed to hash password")
+			}
+			updateData["password"] = string(hashedPassword)
+		}
+
+		if err := service.repository.UpdateWithMap(uow, &credential.Credential{}, updateData,
+			repository.Filter("user_id = ?", userToUpdate.ID)); err != nil {
+			uow.RollBack()
+			return err
+		}
+	}
 
 	uow.Commit()
 	return nil
@@ -222,17 +254,24 @@ func (service *UserService) Delete(userToDelete *user.User) error {
 	defer uow.RollBack()
 
 	if err := service.repository.UpdateWithMap(uow, userToDelete, map[string]interface{}{
-		"DeletedAt": time.Now(),
+		"deleted_at": time.Now(),
+		"deleted_by": userToDelete.DeletedBy,
+		"is_active":  false,
 	},
 		repository.Filter("`id`=?", userToDelete.ID)); err != nil {
 		uow.RollBack()
 		return err
 	}
 
-	if err := uow.DB.Where("user_id = ?", userToDelete.ID).Delete(&credential.Credential{}).Error; err != nil {
-		uow.RollBack()
+	if err := service.repository.UpdateWithMap(uow, &credential.Credential{}, map[string]interface{}{
+		"deleted_at": time.Now(),
+		"deleted_by": userToDelete.DeletedBy,
+	}, repository.Filter("user_id = ?", userToDelete.ID)); err != nil {
 		return err
 	}
+
+	// userToDelete.Credentials.DeletedBy = userToDelete.DeletedBy
+	// userToDelete.Credentials.DeletedAt = userToDelete.DeletedAt
 
 	uow.Commit()
 	return nil

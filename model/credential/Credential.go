@@ -11,14 +11,14 @@ import (
 type Credential struct {
 	model.Base
 	Email    string    `json:"email" gorm:"unique;not null;type:varchar(36)"`
-	Password string    `json:"password" gorm:"not null;type:varchar(50)"`
+	Password string    `json:"password" gorm:"not null;type:varchar(255)"`
 	UserID   uuid.UUID `json:"userId" gorm:"not null;type:varchar(36)"`
 }
 
 type CredentialDTO struct {
 	model.Base
 	Email    string    `json:"email" gorm:"unique;not null;type:varchar(36)"`
-	Password string    `json:"password" gorm:"not null;type:varchar(50)"`
+	Password string    `json:"password" gorm:"not null;type:varchar(255)"`
 	UserID   uuid.UUID `json:"userId" gorm:"not null;type:varchar(36)"`
 	// user user.User `json:"user"`
 }

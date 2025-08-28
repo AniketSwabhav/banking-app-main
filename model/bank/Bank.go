@@ -22,7 +22,7 @@ type BankDTO struct {
 	model.Base
 	FullName         string                            `json:"fullName"`
 	Abbreviation     string                            `json:"abbreviation"`
-	IsActive         bool                              `json:"isActive"`
+	IsActive         bool                              `json:"isActive" gorm:"type:boolean;default:true"`
 	Accounts         []account.Account                 `json:"accounts,omitempty"`
 	BankTransactions []banktransaction.BankTransaction `json:"bankTransactions,omitempty"`
 }

@@ -106,7 +106,7 @@ func (controller *BankController) getBankById(w http.ResponseWriter, r *http.Req
 
 	bankIdFromURL, err := parser.GetUUID("id")
 	if err != nil {
-		web.RespondError(w, errors.NewValidationError("Invalid user ID format"))
+		web.RespondError(w, errors.NewValidationError("Invalid bank ID format"))
 		return
 	}
 

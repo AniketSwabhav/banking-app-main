@@ -6,6 +6,7 @@ import (
 	"banking-app-be/components/security"
 	"banking-app-be/components/web"
 	"banking-app-be/model/account"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -48,6 +49,11 @@ func (Controller *AccountController) RegisterRoutes(router *mux.Router) {
 	//Delete
 	guardedRouter.HandleFunc("/{id}", Controller.deleteAccountByAccountID).Methods(http.MethodDelete)
 	guardedRouter.Use(security.MiddlewareUser)
+
+	//Transfer
+	guardedRouter.HandleFunc("/transfer", Controller.transfer).Methods(http.MethodPost)
+
+	guardedRouter.Use(security.MiddlewareUser)
 }
 
 func (controller *AccountController) createAccount(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +88,7 @@ func (controller *AccountController) createAccount(w http.ResponseWriter, r *htt
 
 func (controller *AccountController) getAllUserAccounts(w http.ResponseWriter, r *http.Request) {
 
-	allAccounts := &[]account.AccountDTO{}
+	allAccounts := []account.AccountDTO{}
 	var totalCount int
 	query := r.URL.Query()
 
@@ -105,7 +111,7 @@ func (controller *AccountController) getAllUserAccounts(w http.ResponseWriter, r
 		return
 	}
 
-	err = controller.AccountService.GetAllAccountsByUserID(userID, allAccounts, &totalCount, limit, offset)
+	err = controller.AccountService.GetAllAccountsByUserID(userID, &allAccounts, &totalCount, limit, offset)
 	if err != nil {
 		web.RespondError(w, err)
 		return
@@ -116,7 +122,7 @@ func (controller *AccountController) getAllUserAccounts(w http.ResponseWriter, r
 
 func (controller *AccountController) getAccountByAccountID(w http.ResponseWriter, r *http.Request) {
 
-	accountToGet := &account.AccountDTO{}
+	accountToGet := account.AccountDTO{}
 
 	parser := web.NewParser(r)
 
@@ -135,7 +141,7 @@ func (controller *AccountController) getAccountByAccountID(w http.ResponseWriter
 	accountToGet.UserID = userID
 	accountToGet.ID = accountIDFromURL
 
-	err = controller.AccountService.GetAccountByAccountID(accountToGet)
+	err = controller.AccountService.GetAccountByAccountID(&accountToGet)
 	if err != nil {
 		web.RespondError(w, err)
 		return
@@ -147,7 +153,7 @@ func (controller *AccountController) getAccountByAccountID(w http.ResponseWriter
 
 func (controller *AccountController) deleteAccountByAccountID(w http.ResponseWriter, r *http.Request) {
 
-	accountToDelete := &account.Account{}
+	accountToDelete := account.Account{}
 	parser := web.NewParser(r)
 
 	userID, err := security.ExtractUserIDFromToken(r)
@@ -166,7 +172,7 @@ func (controller *AccountController) deleteAccountByAccountID(w http.ResponseWri
 	accountToDelete.ID = accountIDFromURL
 	accountToDelete.DeletedBy = userID
 
-	err = controller.AccountService.DeleteAccountById(accountToDelete)
+	err = controller.AccountService.DeleteAccountById(&accountToDelete)
 	if err != nil {
 		web.RespondError(w, err)
 		return
@@ -209,9 +215,9 @@ func (controller *AccountController) withdrawFromAccount(w http.ResponseWriter, 
 	}
 
 	web.RespondJSON(w, http.StatusOK, map[string]interface{}{
-		"message":         "Withdrawal successful",
-		"account_no":      accountToUpdate.AccountNo,
-		"updated_balance": accountToUpdate.AccountBalance,
+		"message": "Withdrawal successful",
+		// "account_no":      accountToUpdate.AccountNo,
+		// "updated_balance": accountToUpdate.AccountBalance,
 	})
 }
 
@@ -248,12 +254,52 @@ func (controller *AccountController) depositetToAccount(w http.ResponseWriter, r
 	}
 
 	web.RespondJSON(w, http.StatusOK, map[string]interface{}{
-		"message":         "Money Deposited successful",
-		"account_no":      accountToUpdate.AccountNo,
-		"updated_balance": accountToUpdate.AccountBalance,
+		"message": "Money Deposited successful",
+		// "account_no":      accountToUpdate.AccountNo,
+		// "updated_balance": accountToUpdate.AccountBalance,
 	})
 }
 
-func (controller *AccountController) selfTransfer(w http.ResponseWriter, r *http.Request) {
+func (controller *AccountController) transfer(w http.ResponseWriter, r *http.Request) {
+
+	fromAccount := account.Account{}
+	toAccount := account.Account{}
+
+	var requestData struct {
+		FromAccountNo string  `json:"fromAccountNo"`
+		ToAccountNo   string  `json:"toAccountNo"`
+		Amount        float32 `json:"amount"`
+	}
+
+	err := web.UnmarshalJSON(r, &requestData)
+	if err != nil {
+		web.RespondError(w, errors.NewHTTPError("Unable to parse requested data", http.StatusBadRequest))
+		return
+	}
+
+	fromAccount.AccountNo = requestData.FromAccountNo
+	fmt.Println("from account number =======================>", fromAccount.AccountNo)
+	toAccount.AccountNo = requestData.ToAccountNo
+
+	userID, err := security.ExtractUserIDFromToken(r)
+	if err != nil {
+		controller.log.Error(err.Error())
+		web.RespondError(w, errors.NewHTTPError("Unauthorized", http.StatusUnauthorized))
+		return
+	}
+
+	fromAccount.UserID = userID
+	fromAccount.UpdatedBy = userID
+	toAccount.UpdatedBy = userID
+
+	err = controller.AccountService.Transfer(fromAccount, toAccount, requestData.Amount)
+	if err != nil {
+		web.RespondError(w, err)
+		return
+	}
+
+	web.RespondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "Money Transferred successfully",
+	})
 
 }

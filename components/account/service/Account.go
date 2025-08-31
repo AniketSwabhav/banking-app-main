@@ -4,6 +4,7 @@ import (
 	"banking-app-be/components/errors"
 	"banking-app-be/model/account"
 	"banking-app-be/model/bank"
+	banktransaction "banking-app-be/model/bankTransaction"
 	"banking-app-be/model/passbook"
 	"banking-app-be/model/user"
 	"banking-app-be/module/repository"
@@ -178,6 +179,10 @@ func (service *AccountService) Withdraw(accountToUpdate account.Account, amount 
 	uow := repository.NewUnitOfWork(service.db, false)
 	defer uow.RollBack()
 
+	if amount <= 0 {
+		return errors.NewValidationError("Withdraw amount must be positive")
+	}
+
 	accountOwner := user.User{}
 	if err := service.repository.GetRecordByID(uow, accountToUpdate.UserID, &accountOwner); err != nil {
 		return errors.NewNotFoundError("Account owner not found")
@@ -203,7 +208,7 @@ func (service *AccountService) Withdraw(accountToUpdate account.Account, amount 
 		return errors.NewValidationError("Insufficient balance")
 	}
 
-	accountToUpdate.AccountBalance = existingAccount.AccountBalance - float32(amount)
+	accountToUpdate.AccountBalance = existingAccount.AccountBalance - amount
 
 	transaction := passbook.Transaction{
 		TimeStamp:      time.Now(),
@@ -213,8 +218,7 @@ func (service *AccountService) Withdraw(accountToUpdate account.Account, amount 
 		Note:           "Withdrawal transaction",
 		AccountID:      existingAccount.ID,
 	}
-
-	if err := uow.DB.Create(&transaction).Error; err != nil {
+	if err := service.repository.Add(uow, transaction); err != nil {
 		return errors.NewDatabaseError("Failed to record transaction")
 	}
 
@@ -247,6 +251,10 @@ func (service *AccountService) Deposite(accountToUpdate account.Account, amount 
 	uow := repository.NewUnitOfWork(service.db, false)
 	defer uow.RollBack()
 
+	if amount <= 0 {
+		return errors.NewValidationError("deposite amount must be positive")
+	}
+
 	accountOwner := user.User{}
 	if err := service.repository.GetRecordByID(uow, accountToUpdate.UserID, &accountOwner); err != nil {
 		return errors.NewNotFoundError("Account owner not found")
@@ -268,7 +276,7 @@ func (service *AccountService) Deposite(accountToUpdate account.Account, amount 
 		return errors.NewInActiveUserError("Can not withdraw money from InActive Bank")
 	}
 
-	accountToUpdate.AccountBalance = existingAccount.AccountBalance + float32(amount)
+	accountToUpdate.AccountBalance = existingAccount.AccountBalance + amount
 
 	transaction := passbook.Transaction{
 		TimeStamp:      time.Now(),
@@ -278,8 +286,7 @@ func (service *AccountService) Deposite(accountToUpdate account.Account, amount 
 		Note:           "Deposite transaction",
 		AccountID:      existingAccount.ID,
 	}
-
-	if err := uow.DB.Create(&transaction).Error; err != nil {
+	if err := service.repository.Add(uow, transaction); err != nil {
 		return errors.NewDatabaseError("Failed to record transaction")
 	}
 
@@ -301,7 +308,153 @@ func (service *AccountService) Deposite(accountToUpdate account.Account, amount 
 		"updated_at":    time.Now(),
 	}
 	if err := service.repository.UpdateWithMap(uow, &user.User{}, updateOwnerData, repository.Filter("id = ?", accountToUpdate.UserID)); err != nil {
-		return err
+		return errors.NewDatabaseError("failed to update total balance of user")
+	}
+
+	uow.Commit()
+	return nil
+}
+
+func (service *AccountService) Transfer(fromAccount, toAccount account.Account, amount float32) error {
+
+	uow := repository.NewUnitOfWork(service.db, false)
+	defer uow.RollBack()
+
+	if amount <= 0 {
+		return errors.NewValidationError("deposite amount must be positive")
+	}
+
+	//-------------------------
+	senderAccountOwner := user.User{}
+	if err := service.repository.GetRecordByID(uow, fromAccount.UserID, &senderAccountOwner); err != nil {
+		return errors.NewNotFoundError("Account owner not found")
+	}
+	if !senderAccountOwner.IsActive {
+		return errors.NewInActiveUserError("InActive user can not transfer money")
+	}
+	if err := service.repository.GetRecord(uow, &fromAccount, repository.Filter("account_no = ? AND user_id = ?", fromAccount.AccountNo, fromAccount.UserID)); err != nil {
+		return errors.NewHTTPError("user can only transfer money from its own acount", http.StatusNotFound)
+	}
+
+	//-------------------------
+	if !fromAccount.IsActive {
+		return errors.NewValidationError("Money can only be sent from active bank account")
+	}
+
+	if fromAccount.AccountBalance < float32(amount) {
+		return errors.NewValidationError("Insufficient balance")
+	}
+
+	//-------------------------
+	senderBank := bank.Bank{}
+	if err := service.repository.GetRecordByID(uow, fromAccount.BankID, &senderBank); err != nil {
+		return errors.NewNotFoundError("sender bank not found")
+	}
+	if !senderBank.IsActive {
+		return errors.NewInActiveUserError("Can not Transfer money from InActive Bank")
+	}
+
+	fromAccount.AccountBalance -= amount
+	senderAccountData := map[string]interface{}{
+		"account_balance": fromAccount.AccountBalance,
+		"updated_by":      fromAccount.UpdatedBy,
+		"updated_at":      time.Now(),
+	}
+	if err := service.repository.UpdateWithMap(uow, &account.Account{}, senderAccountData, repository.Filter("account_no = ? AND user_id = ?", fromAccount.AccountNo, fromAccount.UserID)); err != nil {
+		return errors.NewDatabaseError("failed to update sender account balance")
+	}
+
+	senderTransaction := passbook.Transaction{
+		TimeStamp:      time.Now(),
+		Type:           "Transfer",
+		Amount:         -float32(amount),
+		AccountBalance: fromAccount.AccountBalance,
+		Note:           fmt.Sprintf("%0.2f transferred from %s to %s", amount, fromAccount.AccountNo, toAccount.AccountNo),
+		AccountID:      fromAccount.ID,
+	}
+	if err := service.repository.Add(uow, senderTransaction); err != nil {
+		return errors.NewDatabaseError("Failed to record sender transaction")
+	}
+
+	senderAccountOwner.TotalBalance -= amount
+	senderAccountOwnerData := map[string]interface{}{
+		"total_balance": senderAccountOwner.TotalBalance,
+		"updated_by":    fromAccount.UpdatedBy,
+		"updated_at":    time.Now(),
+	}
+	if err := service.repository.UpdateWithMap(uow, &user.User{}, senderAccountOwnerData, repository.Filter("id = ?", fromAccount.UserID)); err != nil {
+		return errors.NewDatabaseError("failed to update total balance of sender user")
+	}
+
+	//-------------------------
+	if err := service.repository.GetRecord(uow, &toAccount, repository.Filter("account_no = ?", toAccount.AccountNo)); err != nil {
+		return errors.NewNotFoundError("receiver account not found with given accoutn number")
+	}
+	if !toAccount.IsActive {
+		return errors.NewValidationError("Money can only be sent to active bank account")
+	}
+
+	//-------------------------
+	receiverAccountOwner := user.User{}
+	if err := service.repository.GetRecordByID(uow, toAccount.UserID, &receiverAccountOwner); err != nil {
+		return errors.NewNotFoundError("receiver account owner not found.")
+	}
+	if !receiverAccountOwner.IsActive {
+		return errors.NewValidationError("Money could not be sent to InActive user")
+	}
+
+	//-------------------------
+	receiverBank := bank.Bank{}
+	if err := service.repository.GetRecordByID(uow, toAccount.BankID, &receiverBank); err != nil {
+		return errors.NewNotFoundError("receiver bank not found")
+	}
+	if !receiverBank.IsActive {
+		return errors.NewInActiveUserError("Can not Transfer money to InActive Bank")
+	}
+
+	//-------------------------
+	toAccount.AccountBalance += amount
+	receiverAccountData := map[string]interface{}{
+		"account_balance": toAccount.AccountBalance,
+		"updated_by":      toAccount.UpdatedBy,
+		"updated_at":      time.Now(),
+	}
+	if err := service.repository.UpdateWithMap(uow, &account.Account{}, receiverAccountData, repository.Filter("account_no = ? AND user_id = ?", toAccount.AccountNo, toAccount.UserID)); err != nil {
+		return errors.NewDatabaseError("failed to update receiver account balance")
+	}
+
+	receiverTransaction := passbook.Transaction{
+		TimeStamp:      time.Now(),
+		Type:           "Receive",
+		Amount:         +float32(amount),
+		AccountBalance: toAccount.AccountBalance,
+		Note:           fmt.Sprintf("%0.2f received to %s from %s ", amount, toAccount.AccountNo, fromAccount.AccountNo),
+		AccountID:      toAccount.ID,
+	}
+	if err := service.repository.Add(uow, receiverTransaction); err != nil {
+		return errors.NewDatabaseError("Failed to record receiver transaction")
+	}
+
+	receiverAccountOwner.TotalBalance += amount
+	receiverAccountOwnerData := map[string]interface{}{
+		"total_balance": receiverAccountOwner.TotalBalance,
+		"updated_by":    toAccount.UpdatedBy,
+		"updated_at":    time.Now(),
+	}
+	if err := service.repository.UpdateWithMap(uow, &user.User{}, receiverAccountOwnerData, repository.Filter("id = ?", toAccount.UserID)); err != nil {
+		return errors.NewDatabaseError("failed to update total balance of receiver user")
+	}
+
+	//-------------------------
+	if fromAccount.BankID != toAccount.BankID {
+		bankTransfer := banktransaction.BankTransaction{
+			SenderBankID:   fromAccount.BankID,
+			ReceiverBankID: toAccount.BankID,
+			Amount:         amount,
+		}
+		if err := service.repository.Add(uow, &bankTransfer); err != nil {
+			return errors.NewDatabaseError("Failed to record bank transaction")
+		}
 	}
 
 	uow.Commit()

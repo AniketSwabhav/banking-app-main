@@ -10,7 +10,7 @@ import (
 type Repository interface {
 	Add(uow *UnitOfWork, out interface{}) error
 	GetAll(uow *UnitOfWork, out interface{}, queryProcessor ...QueryProcessor) error
-	// GetRecord(uow *UnitOfWork, out interface{}, queryProcessors ...QueryProcessor) error
+	GetRecord(uow *UnitOfWork, out interface{}, queryProcessors ...QueryProcessor) error
 	GetCount(uow *UnitOfWork, out, count interface{}, queryProcessors ...QueryProcessor) error
 	GetRecordByID(uow *UnitOfWork, tenantID uuid.UUID, out interface{}, queryProcessors ...QueryProcessor) error
 	// Save(uow *UnitOfWork, value interface{}) error
@@ -204,4 +204,13 @@ func DoesRecordExistForUser(db *gorm.DB, userID uuid.UUID, out interface{}, quer
 		return true, nil
 	}
 	return false, nil
+}
+
+func (repository *GormRepository) Update(uow *UnitOfWork, out interface{}, queryProcessors ...QueryProcessor) error {
+	db := uow.DB
+	db, err := executeQueryProcessors(db, out, queryProcessors...)
+	if err != nil {
+		return err
+	}
+	return db.Model(out).Update(out).Error
 }

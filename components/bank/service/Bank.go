@@ -71,6 +71,7 @@ func (service *BankService) GetBankByID(targetBank *bank.BankDTO) error {
 		return err
 	}
 
+	uow.Commit()
 	return nil
 }
 

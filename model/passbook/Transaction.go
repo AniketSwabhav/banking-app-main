@@ -3,7 +3,7 @@ package passbook
 import (
 	"time"
 
-	"github.com/google/uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 type Transaction struct {

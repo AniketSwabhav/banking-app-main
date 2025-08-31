@@ -37,7 +37,16 @@ func (Controller *AccountController) RegisterRoutes(router *mux.Router) {
 
 	//Get
 	guardedRouter.HandleFunc("/", Controller.getAllUserAccounts).Methods(http.MethodGet)
+	guardedRouter.HandleFunc("/{id}", Controller.getAccountByAccountID).Methods(http.MethodGet)
 
+	//Withdraw
+	guardedRouter.HandleFunc("/withdraw", Controller.withdrawFromAccount).Methods(http.MethodPost)
+
+	//Deposite
+	guardedRouter.HandleFunc("/deposite", Controller.depositetToAccount).Methods(http.MethodPost)
+
+	//Delete
+	guardedRouter.HandleFunc("/{id}", Controller.deleteAccountByAccountID).Methods(http.MethodDelete)
 	guardedRouter.Use(security.MiddlewareUser)
 }
 
@@ -96,11 +105,155 @@ func (controller *AccountController) getAllUserAccounts(w http.ResponseWriter, r
 		return
 	}
 
-	err = controller.AccountService.GetAccountsByUser(userID, allAccounts, &totalCount, limit, offset)
+	err = controller.AccountService.GetAllAccountsByUserID(userID, allAccounts, &totalCount, limit, offset)
 	if err != nil {
 		web.RespondError(w, err)
 		return
 	}
 
 	web.RespondJSONWithXTotalCount(w, http.StatusOK, totalCount, allAccounts)
+}
+
+func (controller *AccountController) getAccountByAccountID(w http.ResponseWriter, r *http.Request) {
+
+	accountToGet := &account.AccountDTO{}
+
+	parser := web.NewParser(r)
+
+	userID, err := security.ExtractUserIDFromToken(r)
+	if err != nil {
+		web.RespondError(w, errors.NewHTTPError("Unauthorized", http.StatusUnauthorized))
+		return
+	}
+
+	accountIDFromURL, err := parser.GetUUID("id")
+	if err != nil {
+		web.RespondError(w, errors.NewValidationError("Invalid Account ID format"))
+		return
+	}
+
+	accountToGet.UserID = userID
+	accountToGet.ID = accountIDFromURL
+
+	err = controller.AccountService.GetAccountByAccountID(accountToGet)
+	if err != nil {
+		web.RespondError(w, err)
+		return
+	}
+
+	web.RespondJSON(w, http.StatusOK, accountToGet)
+
+}
+
+func (controller *AccountController) deleteAccountByAccountID(w http.ResponseWriter, r *http.Request) {
+
+	accountToDelete := &account.Account{}
+	parser := web.NewParser(r)
+
+	userID, err := security.ExtractUserIDFromToken(r)
+	if err != nil {
+		web.RespondError(w, errors.NewHTTPError("Unauthorized", http.StatusUnauthorized))
+		return
+	}
+
+	accountIDFromURL, err := parser.GetUUID("id")
+	if err != nil {
+		web.RespondError(w, errors.NewValidationError("Invalid Account ID format"))
+		return
+	}
+
+	accountToDelete.UserID = userID
+	accountToDelete.ID = accountIDFromURL
+	accountToDelete.DeletedBy = userID
+
+	err = controller.AccountService.DeleteAccountById(accountToDelete)
+	if err != nil {
+		web.RespondError(w, err)
+		return
+	}
+
+	web.RespondJSON(w, http.StatusOK, map[string]string{"message": "Account deleted successfully"})
+
+}
+
+func (controller *AccountController) withdrawFromAccount(w http.ResponseWriter, r *http.Request) {
+
+	accountToUpdate := account.Account{}
+
+	var requestData struct {
+		AccountNo string  `json:"accountNo"`
+		Amount    float32 `json:"amount"`
+	}
+
+	err := web.UnmarshalJSON(r, &requestData)
+	if err != nil {
+		web.RespondError(w, errors.NewHTTPError("Unable to parse requested data", http.StatusBadRequest))
+		return
+	}
+
+	accountToUpdate.AccountNo = requestData.AccountNo
+
+	userID, err := security.ExtractUserIDFromToken(r)
+	if err != nil {
+		controller.log.Error(err.Error())
+		web.RespondError(w, errors.NewHTTPError("Unauthorized", http.StatusUnauthorized))
+		return
+	}
+	accountToUpdate.UserID = userID
+	accountToUpdate.UpdatedBy = userID
+
+	err = controller.AccountService.Withdraw(accountToUpdate, requestData.Amount)
+	if err != nil {
+		web.RespondError(w, err)
+		return
+	}
+
+	web.RespondJSON(w, http.StatusOK, map[string]interface{}{
+		"message":         "Withdrawal successful",
+		"account_no":      accountToUpdate.AccountNo,
+		"updated_balance": accountToUpdate.AccountBalance,
+	})
+}
+
+func (controller *AccountController) depositetToAccount(w http.ResponseWriter, r *http.Request) {
+
+	accountToUpdate := account.Account{}
+
+	var requestData struct {
+		AccountNo string  `json:"accountNo"`
+		Amount    float32 `json:"amount"`
+	}
+
+	err := web.UnmarshalJSON(r, &requestData)
+	if err != nil {
+		web.RespondError(w, errors.NewHTTPError("Unable to parse requested data", http.StatusBadRequest))
+		return
+	}
+
+	accountToUpdate.AccountNo = requestData.AccountNo
+
+	userID, err := security.ExtractUserIDFromToken(r)
+	if err != nil {
+		controller.log.Error(err.Error())
+		web.RespondError(w, errors.NewHTTPError("Unauthorized", http.StatusUnauthorized))
+		return
+	}
+	accountToUpdate.UserID = userID
+	accountToUpdate.UpdatedBy = userID
+
+	err = controller.AccountService.Deposite(accountToUpdate, requestData.Amount)
+	if err != nil {
+		web.RespondError(w, err)
+		return
+	}
+
+	web.RespondJSON(w, http.StatusOK, map[string]interface{}{
+		"message":         "Money Deposited successful",
+		"account_no":      accountToUpdate.AccountNo,
+		"updated_balance": accountToUpdate.AccountBalance,
+	})
+}
+
+func (controller *AccountController) selfTransfer(w http.ResponseWriter, r *http.Request) {
+
 }

@@ -22,7 +22,7 @@ func ValidateToken(_ http.ResponseWriter, r *http.Request, claim *Claims) error 
 		return errors.NewUnauthorizedError("empty token in Authorization header")
 	}
 
-	fmt.Println("token string ============>>", tokenString)
+	// fmt.Println("token string ============>>", tokenString)
 
 	token, err := checkToken(tokenString, claim)
 	if err != nil {

@@ -4,6 +4,8 @@ import (
 	"banking-app-be/components/errors"
 	"banking-app-be/components/log"
 	"banking-app-be/model/bank"
+	banktransaction "banking-app-be/model/bankTransaction"
+	"banking-app-be/model/user"
 	"banking-app-be/module/repository"
 	"time"
 
@@ -122,6 +124,71 @@ func (service *BankService) DeleteBank(bankToDelete *bank.Bank) error {
 		return err
 	}
 
+	uow.Commit()
+	return nil
+}
+
+func (service *BankService) Settlement(userId uuid.UUID, ledger *[]banktransaction.BankTransaction, totalCount *int) error {
+	uow := repository.NewUnitOfWork(service.db, true)
+	defer uow.RollBack()
+
+	adminUser := user.User{}
+	if err := service.repository.GetRecordByID(uow, userId, &adminUser); err != nil {
+		return err
+	}
+	if !adminUser.IsAdmin || !adminUser.IsActive {
+		return errors.NewValidationError("Only active admin users can access settlement records")
+	}
+
+	allTransactions := []banktransaction.BankTransaction{}
+	if err := service.repository.GetAll(uow, &allTransactions); err != nil {
+		return errors.NewDatabaseError("Unable to fetch bank transaction entries")
+	}
+
+	pairwise := make(map[uuid.UUID]map[uuid.UUID]float32)
+	for _, tx := range allTransactions {
+		if _, exists := pairwise[tx.SenderBankID]; !exists {
+			pairwise[tx.SenderBankID] = make(map[uuid.UUID]float32)
+		}
+		pairwise[tx.SenderBankID][tx.ReceiverBankID] += tx.Amount
+	}
+
+	processed := make(map[string]bool)
+	netSettlements := []banktransaction.BankTransaction{}
+
+	for fromBank, toMap := range pairwise {
+		for toBank, amountFromTo := range toMap {
+			pairKey := fromBank.String() + "->" + toBank.String()
+			reversePairKey := toBank.String() + "->" + fromBank.String()
+
+			if processed[pairKey] || processed[reversePairKey] {
+				continue
+			}
+
+			amountToFrom := pairwise[toBank][fromBank]
+			net := amountFromTo - amountToFrom
+
+			if net > 0 {
+				netSettlements = append(netSettlements, banktransaction.BankTransaction{
+					SenderBankID:   toBank,
+					ReceiverBankID: fromBank,
+					Amount:         net,
+				})
+			} else if net < 0 {
+				netSettlements = append(netSettlements, banktransaction.BankTransaction{
+					SenderBankID:   fromBank,
+					ReceiverBankID: toBank,
+					Amount:         -net,
+				})
+			}
+
+			processed[pairKey] = true
+			processed[reversePairKey] = true
+		}
+	}
+
+	*ledger = netSettlements
+	*totalCount = len(netSettlements)
 	uow.Commit()
 	return nil
 }

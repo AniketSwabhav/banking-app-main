@@ -6,6 +6,7 @@ import (
 	"banking-app-be/components/security"
 	"banking-app-be/components/web"
 	"banking-app-be/model/bank"
+	banktransaction "banking-app-be/model/bankTransaction"
 	"net/http"
 	"strconv"
 
@@ -35,15 +36,18 @@ func (Controller *BankController) RegisterRoutes(router *mux.Router) {
 	//Post
 	guardedRouter.HandleFunc("/register-bank", Controller.addBank).Methods(http.MethodPost)
 
+	//Settlement
+	guardedRouter.HandleFunc("/settlement", Controller.settlement).Methods(http.MethodGet)
+
 	//Get
 	guardedRouter.HandleFunc("/", Controller.getAllBanks).Methods(http.MethodGet)
 	guardedRouter.HandleFunc("/{id}", Controller.getBankById).Methods(http.MethodGet)
 
 	//Update
-	bankRouter.HandleFunc("/{id}", Controller.updateBankById).Methods(http.MethodPut)
+	guardedRouter.HandleFunc("/{id}", Controller.updateBankById).Methods(http.MethodPut)
 
 	//Delete
-	bankRouter.HandleFunc("/{id}", Controller.deleteBankById).Methods(http.MethodDelete)
+	guardedRouter.HandleFunc("/{id}", Controller.deleteBankById).Methods(http.MethodDelete)
 
 	guardedRouter.Use(security.MiddlewareAdmin)
 }
@@ -187,4 +191,25 @@ func (controller *BankController) deleteBankById(w http.ResponseWriter, r *http.
 	}
 
 	web.RespondJSON(w, http.StatusOK, map[string]string{"message": "Bank deleted successfully"})
+}
+
+func (controller *BankController) settlement(w http.ResponseWriter, r *http.Request) {
+	ledger := []banktransaction.BankTransaction{}
+	var totalCount int
+
+	userID, err := security.ExtractUserIDFromToken(r)
+	if err != nil {
+		controller.log.Error("Failed to extract user ID: " + err.Error())
+		web.RespondError(w, err)
+		return
+	}
+
+	err = controller.BankService.Settlement(userID, &ledger, &totalCount)
+	if err != nil {
+		controller.log.Error("Failed to compute settlement: " + err.Error())
+		web.RespondError(w, err)
+		return
+	}
+
+	web.RespondJSONWithXTotalCount(w, http.StatusOK, totalCount, ledger)
 }

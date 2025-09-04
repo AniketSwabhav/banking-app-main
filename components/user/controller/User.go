@@ -183,14 +183,9 @@ func (controller *UserController) getUserById(w http.ResponseWriter, r *http.Req
 func (controller *UserController) updateUserById(w http.ResponseWriter, r *http.Request) {
 
 	var userToUpdate = user.User{}
-
 	parser := web.NewParser(r)
 
-	err := web.UnmarshalJSON(r, &userToUpdate)
-	if err != nil {
-		web.RespondError(w, errors.NewHTTPError("unable to parse requested data", http.StatusBadRequest))
-		return
-	}
+	var err error
 
 	userToUpdate.UpdatedBy, err = security.ExtractUserIDFromToken(r)
 	if err != nil {
@@ -199,15 +194,33 @@ func (controller *UserController) updateUserById(w http.ResponseWriter, r *http.
 		return
 	}
 
-	userIdFromURL, err := parser.GetUUID("id")
+	userToUpdate.ID, err = parser.GetUUID("id")
 	if err != nil {
 		web.RespondError(w, errors.NewValidationError("Invalid user ID format"))
 		return
 	}
 
-	userToUpdate.ID = userIdFromURL
+	// err = controller.UserService.UpdateUser(&userToUpdate)
+	// if err != nil {
+	// 	controller.log.Print(err.Error())
+	// 	web.RespondError(w, err)
+	// 	return
+	// }
 
-	err = controller.UserService.UpdateUser(&userToUpdate)
+	err = web.UnmarshalJSON(r, &userToUpdate)
+	if err != nil {
+		web.RespondError(w, errors.NewHTTPError("unable to parse requested data", http.StatusBadRequest))
+		return
+	}
+
+	err = userToUpdate.Validate()
+	if err != nil {
+		controller.log.Error(err.Error())
+		web.RespondError(w, err)
+		return
+	}
+
+	err = controller.UserService.NormalUpdate(&userToUpdate)
 	if err != nil {
 		controller.log.Print(err.Error())
 		web.RespondError(w, err)
@@ -228,7 +241,6 @@ func (controller *UserController) updateUserById(w http.ResponseWriter, r *http.
 func (controller *UserController) deleteUserById(w http.ResponseWriter, r *http.Request) {
 
 	userToDelete := user.User{}
-
 	parser := web.NewParser(r)
 
 	userIdFromURL, err := parser.GetUUID("id")

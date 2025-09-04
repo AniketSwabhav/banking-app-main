@@ -20,13 +20,12 @@ import (
 
 type App struct {
 	sync.Mutex
-	Name   string
-	Router *mux.Router
-	DB     *gorm.DB
-	Log    log.Logger
-	Server *http.Server
-	WG     *sync.WaitGroup
-
+	Name       string
+	Router     *mux.Router
+	DB         *gorm.DB
+	Log        log.Logger
+	Server     *http.Server
+	WG         *sync.WaitGroup
 	Repository repository.Repository
 }
 

@@ -13,8 +13,8 @@ type User struct {
 	FirstName    string                 `json:"firstName" example:"Ravi" gorm:"type:varchar(500)"`
 	LastName     string                 `json:"lastName" example:"Sharma" gorm:"type:varchar(50)"`
 	PhoneNo      string                 `sql:"index" json:"phoneNo" example:"9700795509" gorm:"type:varchar(15)"`
-	IsAdmin      bool                   `json:"isAdmin" gorm:"type:boolean;default:false"`
-	IsActive     bool                   `json:"isActive" gorm:"type:boolean;default:true"`
+	IsAdmin      *bool                  `json:"isAdmin" gorm:"type:tinyint(1);default:false"`
+	IsActive     *bool                  `json:"isActive" gorm:"type:tinyint(1);default:true"`
 	TotalBalance float32                `json:"totalBalance" gorm:"type:float;DEFAULT:0"`
 	Credentials  *credential.Credential `json:"credential" gorm:"foreignKey:UserId;references:ID"`
 	// Accounts     []account.Account      `json:"accounts" gorm:"foreignKey:UserId;references:ID"`
@@ -25,8 +25,8 @@ type UserDTO struct {
 	FirstName    string                 `json:"firstName" example:"Ravi" gorm:"type:varchar(50)"`
 	LastName     string                 `json:"lastName" example:"Sharma" gorm:"type:varchar(50)"`
 	PhoneNo      string                 `sql:"index" json:"phoneNo" example:"9700795509" gorm:"type:varchar(15)"`
-	IsAdmin      bool                   `json:"isAdmin" gorm:"type:boolean;default:false"`
-	IsActive     bool                   `json:"isActive" gorm:"type:boolean;default:true"`
+	IsAdmin      *bool                  `json:"isAdmin" gorm:"type:tinyint(1);default:false"`
+	IsActive     *bool                  `json:"isActive" gorm:"type:tinyint(1);default:true"`
 	TotalBalance float32                `json:"totalBalance" gorm:"type:float;DEFAULT:0"`
 	Credentials  *credential.Credential `json:"credential" gorm:"foreignKey:UserId;references:ID"`
 	Accounts     []account.Account      `json:"accounts" gorm:"foreignKey:UserId;references:ID"`

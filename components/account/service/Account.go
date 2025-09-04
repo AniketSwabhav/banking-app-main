@@ -39,7 +39,7 @@ func (service *AccountService) CreateAccount(newAccount *account.Account) error 
 		return errors.NewNotFoundError("Account owner not found")
 	}
 
-	if !accountOwner.IsActive {
+	if !*accountOwner.IsActive {
 		return errors.NewInActiveUserError("Can not create a Bank account for InActive user")
 	}
 
@@ -48,7 +48,7 @@ func (service *AccountService) CreateAccount(newAccount *account.Account) error 
 		return errors.NewNotFoundError("Bank not found with given Id")
 	}
 
-	if !accountOwner.IsActive {
+	if !*accountOwner.IsActive {
 		return errors.NewInActiveUserError("Can not create a account in InActive bank")
 	}
 
@@ -187,7 +187,7 @@ func (service *AccountService) Withdraw(accountToUpdate account.Account, amount 
 	if err := service.repository.GetRecordByID(uow, accountToUpdate.UserID, &accountOwner); err != nil {
 		return errors.NewNotFoundError("Account owner not found")
 	}
-	if !accountOwner.IsActive {
+	if !*accountOwner.IsActive {
 		return errors.NewInActiveUserError("InActive user can not withdraw money")
 	}
 
@@ -200,7 +200,7 @@ func (service *AccountService) Withdraw(accountToUpdate account.Account, amount 
 	if err := service.repository.GetRecordByID(uow, existingAccount.BankID, &bank); err != nil {
 		return errors.NewNotFoundError("invalid bankid")
 	}
-	if !bank.IsActive {
+	if !*bank.IsActive {
 		return errors.NewInActiveUserError("Can not withdraw money from InActive Bank")
 	}
 
@@ -259,7 +259,7 @@ func (service *AccountService) Deposite(accountToUpdate account.Account, amount 
 	if err := service.repository.GetRecordByID(uow, accountToUpdate.UserID, &accountOwner); err != nil {
 		return errors.NewNotFoundError("Account owner not found")
 	}
-	if !accountOwner.IsActive {
+	if !*accountOwner.IsActive {
 		return errors.NewInActiveUserError("InActive user can not withdraw money")
 	}
 
@@ -272,7 +272,7 @@ func (service *AccountService) Deposite(accountToUpdate account.Account, amount 
 	if err := service.repository.GetRecordByID(uow, existingAccount.BankID, &bank); err != nil {
 		return errors.NewNotFoundError("invalid bankid")
 	}
-	if !bank.IsActive {
+	if !*bank.IsActive {
 		return errors.NewInActiveUserError("Can not withdraw money from InActive Bank")
 	}
 
@@ -329,7 +329,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 	if err := service.repository.GetRecordByID(uow, fromAccount.UserID, &senderAccountOwner); err != nil {
 		return errors.NewNotFoundError("Account owner not found")
 	}
-	if !senderAccountOwner.IsActive {
+	if !*senderAccountOwner.IsActive {
 		return errors.NewInActiveUserError("InActive user can not transfer money")
 	}
 	if err := service.repository.GetRecord(uow, &fromAccount, repository.Filter("account_no = ? AND user_id = ?", fromAccount.AccountNo, fromAccount.UserID)); err != nil {
@@ -337,7 +337,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 	}
 
 	//-------------------------
-	if !fromAccount.IsActive {
+	if !*fromAccount.IsActive {
 		return errors.NewValidationError("Money can only be sent from active bank account")
 	}
 
@@ -350,7 +350,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 	if err := service.repository.GetRecordByID(uow, fromAccount.BankID, &senderBank); err != nil {
 		return errors.NewNotFoundError("sender bank not found")
 	}
-	if !senderBank.IsActive {
+	if !*senderBank.IsActive {
 		return errors.NewInActiveUserError("Can not Transfer money from InActive Bank")
 	}
 
@@ -390,7 +390,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 	if err := service.repository.GetRecord(uow, &toAccount, repository.Filter("account_no = ?", toAccount.AccountNo)); err != nil {
 		return errors.NewNotFoundError("receiver account not found with given accoutn number")
 	}
-	if !toAccount.IsActive {
+	if !*toAccount.IsActive {
 		return errors.NewValidationError("Money can only be sent to active bank account")
 	}
 
@@ -399,7 +399,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 	if err := service.repository.GetRecordByID(uow, toAccount.UserID, &receiverAccountOwner); err != nil {
 		return errors.NewNotFoundError("receiver account owner not found.")
 	}
-	if !receiverAccountOwner.IsActive {
+	if !*receiverAccountOwner.IsActive {
 		return errors.NewValidationError("Money could not be sent to InActive user")
 	}
 
@@ -408,7 +408,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 	if err := service.repository.GetRecordByID(uow, toAccount.BankID, &receiverBank); err != nil {
 		return errors.NewNotFoundError("receiver bank not found")
 	}
-	if !receiverBank.IsActive {
+	if !*receiverBank.IsActive {
 		return errors.NewInActiveUserError("Can not Transfer money to InActive Bank")
 	}
 

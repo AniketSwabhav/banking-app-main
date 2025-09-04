@@ -87,23 +87,26 @@ func (service *BankService) UpdateBank(bankToUpdate *bank.Bank) error {
 	uow := repository.NewUnitOfWork(service.db, false)
 	defer uow.RollBack()
 
-	existingBank := bank.Bank{}
-	if err := service.repository.GetRecordByID(uow, bankToUpdate.ID, &existingBank); err != nil {
-		return err
-	}
+	// existingBank := bank.Bank{}
+	// if err := service.repository.GetRecordByID(uow, bankToUpdate.ID, &existingBank); err != nil {
+	// 	return err
+	// }
 
-	updateData := map[string]interface{}{
-		"full_name":  bankToUpdate.FullName,
-		"updated_by": bankToUpdate.UpdatedBy,
-		"updated_at": time.Now(),
-	}
+	// updateData := map[string]interface{}{
+	// 	"full_name":  bankToUpdate.FullName,
+	// 	"updated_by": bankToUpdate.UpdatedBy,
+	// 	"updated_at": time.Now(),
+	// }
+	// if bankToUpdate.FullName != "" && bankToUpdate.FullName != existingBank.FullName {
+	// 	updateData["abbreviation"] = bank.GetAbbreviation(bankToUpdate.FullName)
+	// }
+	// if err := service.repository.UpdateWithMap(uow, &bank.Bank{}, updateData, repository.Filter("id = ?", bankToUpdate.ID)); err != nil {
+	// 	return err
+	// }
 
-	if bankToUpdate.FullName != "" && bankToUpdate.FullName != existingBank.FullName {
-		updateData["abbreviation"] = bank.GetAbbreviation(bankToUpdate.FullName)
-	}
-
-	if err := service.repository.UpdateWithMap(uow, &bank.Bank{}, updateData, repository.Filter("id = ?", bankToUpdate.ID)); err != nil {
-		return err
+	if err := service.repository.Update(uow, bankToUpdate); err != nil {
+		uow.RollBack()
+		return errors.NewDatabaseError("Unable to update bank record")
 	}
 
 	uow.Commit()
@@ -136,7 +139,7 @@ func (service *BankService) Settlement(userId uuid.UUID, ledger *[]banktransacti
 	if err := service.repository.GetRecordByID(uow, userId, &adminUser); err != nil {
 		return err
 	}
-	if !adminUser.IsAdmin || !adminUser.IsActive {
+	if !*adminUser.IsAdmin || !*adminUser.IsActive {
 		return errors.NewValidationError("Only active admin users can access settlement records")
 	}
 

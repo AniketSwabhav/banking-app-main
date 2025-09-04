@@ -14,7 +14,7 @@ type Repository interface {
 	GetCount(uow *UnitOfWork, out, count interface{}, queryProcessors ...QueryProcessor) error
 	GetRecordByID(uow *UnitOfWork, tenantID uuid.UUID, out interface{}, queryProcessors ...QueryProcessor) error
 	// Save(uow *UnitOfWork, value interface{}) error
-	// Update(uow *UnitOfWork, out interface{}, queryProcessors ...QueryProcessor) error
+	Update(uow *UnitOfWork, out interface{}, queryProcessors ...QueryProcessor) error
 	UpdateWithMap(uow *UnitOfWork, model interface{}, value map[string]interface{}, queryProcessors ...QueryProcessor) error
 }
 

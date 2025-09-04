@@ -126,42 +126,48 @@ func (controller *BankController) getBankById(w http.ResponseWriter, r *http.Req
 }
 
 func (controller *BankController) updateBankById(w http.ResponseWriter, r *http.Request) {
-	updatedBank := bank.Bank{}
+	bankToUpdate := bank.Bank{}
 	parser := web.NewParser(r)
 
-	if err := web.UnmarshalJSON(r, &updatedBank); err != nil {
-		web.RespondError(w, errors.NewHTTPError("unable to parse request data", http.StatusBadRequest))
-		return
-	}
+	var err error
 
-	userID, err := security.ExtractUserIDFromToken(r)
+	bankToUpdate.UpdatedBy, err = security.ExtractUserIDFromToken(r)
 	if err != nil {
 		controller.log.Error(err.Error())
 		web.RespondError(w, err)
 		return
 	}
 
-	updatedBank.UpdatedBy = userID
-
-	bankIdFromURL, err := parser.GetUUID("id")
+	bankToUpdate.ID, err = parser.GetUUID("id")
 	if err != nil {
 		web.RespondError(w, errors.NewValidationError("Invalid bank ID format"))
 		return
 	}
 
-	updatedBank.ID = bankIdFromURL
+	if err := web.UnmarshalJSON(r, &bankToUpdate); err != nil {
+		web.RespondError(w, errors.NewHTTPError("unable to parse request data", http.StatusBadRequest))
+		return
+	}
 
-	if err := controller.BankService.UpdateBank(&updatedBank); err != nil {
+	err = bankToUpdate.Validate()
+	if err != nil {
+		controller.log.Error(err.Error())
 		web.RespondError(w, err)
 		return
 	}
 
-	// updatedBankDTO := bank.BankDTO{}
-	// err = controller.BankService.GetBankByID(&updatedBankDTO)
-	// if err != nil {
-	// 	web.RespondError(w, err)
-	// 	return
-	// }
+	if err := controller.BankService.UpdateBank(&bankToUpdate); err != nil {
+		web.RespondError(w, err)
+		return
+	}
+
+	updatedBank := bank.BankDTO{}
+	updatedBank.ID = bankToUpdate.ID
+	err = controller.BankService.GetBankByID(&updatedBank)
+	if err != nil {
+		web.RespondError(w, err)
+		return
+	}
 
 	web.RespondJSON(w, http.StatusOK, updatedBank)
 }

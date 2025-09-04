@@ -32,7 +32,7 @@ func (service *PassbookService) GetPassbookByAccountNo(passbook *[]passbook.Tran
 	if err := service.repository.GetRecordByID(uow, userId, &accountOwner); err != nil {
 		return errors.NewDatabaseError("user not found")
 	}
-	if !accountOwner.IsActive {
+	if accountOwner.IsActive != nil && !*accountOwner.IsActive {
 		return errors.NewInActiveUserError("can not get the passbook records for InActive user")
 	}
 

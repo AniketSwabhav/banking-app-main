@@ -13,7 +13,7 @@ type Bank struct {
 	model.Base
 	FullName         string                            `json:"fullName" example:"State Bank of India" gorm:"type:varchar(100);not null"`
 	Abbreviation     string                            `json:"abbreviation" example:"SBI" gorm:"type:varchar(36);not null"`
-	IsActive         bool                              `json:"isActive" gorm:"type:boolean;default:true"`
+	IsActive         *bool                             `json:"isActive" gorm:"type:tinyint(1);default:true"`
 	Accounts         []account.Account                 `json:"-" gorm:"foreignKey:BankID;references:ID"`
 	BankTransactions []banktransaction.BankTransaction `json:"-" gorm:"foreignKey:SenderBankID;references:ID"`
 }
@@ -22,7 +22,7 @@ type BankDTO struct {
 	model.Base
 	FullName         string                            `json:"fullName"`
 	Abbreviation     string                            `json:"abbreviation"`
-	IsActive         bool                              `json:"isActive" gorm:"type:boolean;default:true"`
+	IsActive         *bool                             `json:"isActive" gorm:"type:tinyint(1);default:true"`
 	Accounts         []account.Account                 `json:"accounts,omitempty"`
 	BankTransactions []banktransaction.BankTransaction `json:"bankTransactions,omitempty"`
 }

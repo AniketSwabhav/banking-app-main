@@ -13,7 +13,7 @@ type Account struct {
 	model.Base
 	AccountNo      string                 `json:"accountNo" gorm:"unique;not null;type:varchar(20)"`
 	AccountBalance float32                `json:"balance" gorm:"type:float;DEFAULT:0"`
-	IsActive       bool                   `json:"isActive" gorm:"type:boolean;default:true"`
+	IsActive       *bool                  `json:"isActive" gorm:"type:tinyint(1);default:true"`
 	BankID         uuid.UUID              `json:"-" gorm:"not null;type:varchar(36)"`
 	UserID         uuid.UUID              `json:"-" gorm:"not null;type:varchar(36)"`
 	PassBook       []passbook.Transaction `json:"passbook" gorm:"foreignKey:AccountID;references:ID"`
@@ -22,7 +22,7 @@ type AccountDTO struct {
 	model.Base
 	AccountNo      string                 `json:"accountNo" gorm:"unique;not null;type:varchar(20)"`
 	AccountBalance float32                `json:"balance" gorm:"type:float;DEFAULT:0"`
-	IsActive       bool                   `json:"isActive" gorm:"type:boolean;default:true"`
+	IsActive       *bool                  `json:"isActive" gorm:"type:tinyint(1);default:true"`
 	BankID         uuid.UUID              `json:"bankId" gorm:"not null;type:varchar(36)"`
 	UserID         uuid.UUID              `json:"userId" gorm:"not null;type:varchar(36)"`
 	PassBook       []passbook.Transaction `json:"passBook" gorm:"foreignKey:AccountID;references:ID"`

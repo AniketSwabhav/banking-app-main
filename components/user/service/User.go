@@ -50,7 +50,7 @@ func (service *UserService) CreateAdmin(newUser *user.User) error {
 		return err
 	}
 
-	newUser.IsAdmin = true
+	*newUser.IsAdmin = true
 
 	hashedPassword, err := hashPassword(newUser.Credentials.Password)
 	if err != nil {
@@ -139,10 +139,10 @@ func (service *UserService) Login(userCredential *credential.Credential, claim *
 
 	*claim = security.Claims{
 		UserID:   foundUser.ID,
-		IsAdmin:  foundUser.IsAdmin,
-		IsActive: foundUser.IsActive,
+		IsAdmin:  *foundUser.IsAdmin,
+		IsActive: *foundUser.IsActive,
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(30 * time.Minute).Unix(),
+			ExpiresAt: time.Now().Add(30 * time.Hour).Unix(),
 		},
 	}
 
@@ -243,6 +243,54 @@ func (service *UserService) UpdateUser(userToUpdate *user.User) error {
 	return nil
 }
 
+func (service *UserService) NormalUpdate(userToUpdate *user.User) error {
+
+	err := service.doesUserExist(userToUpdate.ID)
+	if err != nil {
+		return err
+	}
+
+	uow := repository.NewUnitOfWork(service.db, false)
+	defer uow.RollBack()
+
+	// existingUser := user.User{}
+	// if err := service.repository.GetRecordByID(uow, userToUpdate.ID, &userToUpdate); err != nil {
+	// 	return err
+	// }
+
+	fmt.Printf("userToupdate %+v", userToUpdate)
+	if err := service.repository.Update(uow, userToUpdate); err != nil {
+		uow.RollBack()
+		return errors.NewDatabaseError("Unable to update user record")
+	}
+
+	if userToUpdate.Credentials != nil {
+		cred := userToUpdate.Credentials
+
+		if err := cred.Validate(); err != nil {
+			uow.RollBack()
+			return err
+		}
+
+		if cred.Password != "" {
+			hashedPassword, err := hashPassword(cred.Password)
+			if err != nil {
+				uow.RollBack()
+				return errors.NewValidationError("Failed to hash password")
+			}
+			userToUpdate.Credentials.Password = string(hashedPassword)
+		}
+
+		if err := service.repository.Update(uow, cred, repository.Filter("user_id = ?", userToUpdate.ID)); err != nil {
+			uow.RollBack()
+			errors.NewDatabaseError("Unable to update the user credentials")
+		}
+	}
+
+	uow.Commit()
+	return nil
+}
+
 func (service *UserService) Delete(userToDelete *user.User) error {
 
 	err := service.doesUserExist(userToDelete.ID)
@@ -256,7 +304,7 @@ func (service *UserService) Delete(userToDelete *user.User) error {
 	if err := service.repository.UpdateWithMap(uow, userToDelete, map[string]interface{}{
 		"deleted_at": time.Now(),
 		"deleted_by": userToDelete.DeletedBy,
-		"is_active":  false,
+		// "is_active":  false,
 	},
 		repository.Filter("`id`=?", userToDelete.ID)); err != nil {
 		uow.RollBack()

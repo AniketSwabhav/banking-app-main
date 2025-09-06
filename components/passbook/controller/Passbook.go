@@ -7,6 +7,7 @@ import (
 	"banking-app-be/components/security"
 	"banking-app-be/components/web"
 	"banking-app-be/model/passbook"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -30,9 +31,11 @@ func (Controller *PassbookController) RegisterRoutes(router *mux.Router) {
 	// http://localhost:8001/api/v1/banking-app/
 	accountRouter := router.PathPrefix("/passbook").Subrouter()
 	guardedRouter := accountRouter.PathPrefix("/").Subrouter()
+	commonRouter := accountRouter.PathPrefix("/").Subrouter()
 
 	//Get
 	guardedRouter.HandleFunc("/", Controller.getPassbookByAccountNo).Methods(http.MethodPost)
+	commonRouter.HandleFunc("/{accountId}", Controller.getPassbookByAccountId).Methods(http.MethodGet)
 
 	guardedRouter.Use(security.MiddlewareUser)
 }
@@ -81,4 +84,48 @@ func (controller *PassbookController) getPassbookByAccountNo(w http.ResponseWrit
 
 	web.RespondJSONWithXTotalCount(w, http.StatusOK, totalCount, passbook)
 
+}
+
+func (controller *PassbookController) getPassbookByAccountId(w http.ResponseWriter, r *http.Request) {
+
+	passbook := []passbook.Transaction{}
+	parser := web.NewParser(r)
+
+	var totalCount int
+	query := r.URL.Query()
+
+	limitStr := query.Get("limit")
+	offsetStr := query.Get("offset")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 5
+	}
+
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	accountId, err := parser.GetUUID("accountId")
+	if err != nil {
+		web.RespondError(w, errors.NewValidationError("Invalid user ID format"))
+		return
+	}
+	fmt.Println("Account Id ===================>", accountId)
+
+	userID, err := security.ExtractUserIDFromToken(r)
+	if err != nil {
+		web.RespondError(w, errors.NewHTTPError("Unauthorized", http.StatusUnauthorized))
+		return
+	}
+	fmt.Println("User Id ======================>", userID)
+
+	err = controller.PassbookService.GetPassbookByAccountId(&passbook, userID, accountId, &totalCount, limit, offset)
+	if err != nil {
+		web.RespondError(w, err)
+		return
+	}
+
+	web.RespondJSONWithXTotalCount(w, http.StatusOK, totalCount, passbook)
 }

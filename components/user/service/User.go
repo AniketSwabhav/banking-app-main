@@ -174,7 +174,7 @@ func (service *UserService) GetUserByID(targetUser *user.UserDTO) error {
 	uow := repository.NewUnitOfWork(service.db, true)
 	defer uow.RollBack()
 
-	err := service.repository.GetRecordByID(uow, targetUser.ID, targetUser, repository.PreloadAssociations([]string{"Credentials", "Accounts"}))
+	err := service.repository.GetRecordByID(uow, targetUser.ID, targetUser, repository.PreloadAssociations([]string{"Credentials", "Accounts", "Accounts.Bank"}))
 	if err != nil {
 		return err
 	}
@@ -253,11 +253,6 @@ func (service *UserService) NormalUpdate(userToUpdate *user.User) error {
 	uow := repository.NewUnitOfWork(service.db, false)
 	defer uow.RollBack()
 
-	// existingUser := user.User{}
-	// if err := service.repository.GetRecordByID(uow, userToUpdate.ID, &userToUpdate); err != nil {
-	// 	return err
-	// }
-
 	fmt.Printf("userToupdate %+v", userToUpdate)
 	if err := service.repository.Update(uow, userToUpdate); err != nil {
 		uow.RollBack()
@@ -304,7 +299,6 @@ func (service *UserService) Delete(userToDelete *user.User) error {
 	if err := service.repository.UpdateWithMap(uow, userToDelete, map[string]interface{}{
 		"deleted_at": time.Now(),
 		"deleted_by": userToDelete.DeletedBy,
-		// "is_active":  false,
 	},
 		repository.Filter("`id`=?", userToDelete.ID)); err != nil {
 		uow.RollBack()
@@ -317,9 +311,6 @@ func (service *UserService) Delete(userToDelete *user.User) error {
 	}, repository.Filter("user_id = ?", userToDelete.ID)); err != nil {
 		return err
 	}
-
-	// userToDelete.Credentials.DeletedBy = userToDelete.DeletedBy
-	// userToDelete.Credentials.DeletedAt = userToDelete.DeletedAt
 
 	uow.Commit()
 	return nil

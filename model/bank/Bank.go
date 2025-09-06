@@ -14,8 +14,8 @@ type Bank struct {
 	FullName         string                            `json:"fullName" example:"State Bank of India" gorm:"type:varchar(100);not null"`
 	Abbreviation     string                            `json:"abbreviation" example:"SBI" gorm:"type:varchar(36);not null"`
 	IsActive         *bool                             `json:"isActive" gorm:"type:tinyint(1);default:true"`
-	Accounts         []account.Account                 `json:"-" gorm:"foreignKey:BankID;references:ID"`
-	BankTransactions []banktransaction.BankTransaction `json:"-" gorm:"foreignKey:SenderBankID;references:ID"`
+	Accounts         []account.Account                 `json:"accounts"`
+	BankTransactions []banktransaction.BankTransaction `json:"bankTransactions"`
 }
 
 type BankDTO struct {
@@ -23,8 +23,8 @@ type BankDTO struct {
 	FullName         string                            `json:"fullName"`
 	Abbreviation     string                            `json:"abbreviation"`
 	IsActive         *bool                             `json:"isActive" gorm:"type:tinyint(1);default:true"`
-	Accounts         []account.Account                 `json:"accounts,omitempty"`
-	BankTransactions []banktransaction.BankTransaction `json:"bankTransactions,omitempty"`
+	Accounts         []account.AccountDTO              `json:"accounts," gorm:"foreignKey:BankID"`
+	BankTransactions []banktransaction.BankTransaction `json:"bankTransactions" gorm:"foreignKey:SenderBankID"`
 }
 
 func (*BankDTO) TableName() string {

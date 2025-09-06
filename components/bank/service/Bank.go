@@ -68,7 +68,7 @@ func (service *BankService) GetBankByID(targetBank *bank.BankDTO) error {
 	defer uow.RollBack()
 
 	//repository.PreloadAssociations([]string{"Accounts", "bankTransactions"})
-	err := service.repository.GetRecordByID(uow, targetBank.ID, targetBank)
+	err := service.repository.GetRecordByID(uow, targetBank.ID, targetBank, repository.PreloadAssociations([]string{"Accounts", "Accounts.User"}))
 	if err != nil {
 		return err
 	}

@@ -32,24 +32,23 @@ func (Controller *BankController) RegisterRoutes(router *mux.Router) {
 	bankRouter := router.PathPrefix("/bank").Subrouter()
 	guardedRouter := bankRouter.PathPrefix("/").Subrouter()
 	// unguardedRouter := userRouter.PathPrefix("/").Subrouter()
+	commonRouter := bankRouter.PathPrefix("/").Subrouter()
 
 	//Post
 	guardedRouter.HandleFunc("/register-bank", Controller.addBank).Methods(http.MethodPost)
-
 	//Settlement
 	guardedRouter.HandleFunc("/settlement", Controller.settlement).Methods(http.MethodGet)
-
-	//Get
-	guardedRouter.HandleFunc("/", Controller.getAllBanks).Methods(http.MethodGet)
-	guardedRouter.HandleFunc("/{id}", Controller.getBankById).Methods(http.MethodGet)
-
 	//Update
 	guardedRouter.HandleFunc("/{id}", Controller.updateBankById).Methods(http.MethodPut)
-
 	//Delete
 	guardedRouter.HandleFunc("/{id}", Controller.deleteBankById).Methods(http.MethodDelete)
-
 	guardedRouter.Use(security.MiddlewareAdmin)
+
+	//===========================
+
+	//Get
+	commonRouter.HandleFunc("/", Controller.getAllBanks).Methods(http.MethodGet)
+	commonRouter.HandleFunc("/{id}", Controller.getBankById).Methods(http.MethodGet)
 }
 
 func (controller *BankController) addBank(w http.ResponseWriter, r *http.Request) {

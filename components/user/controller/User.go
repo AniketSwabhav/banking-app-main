@@ -32,23 +32,24 @@ func (userController *UserController) RegisterRoutes(router *mux.Router) {
 	userRouter := router.PathPrefix("/user").Subrouter()
 	guardedRouter := userRouter.PathPrefix("/").Subrouter()
 	unguardedRouter := userRouter.PathPrefix("/").Subrouter()
+	commonRouter := userRouter.PathPrefix("/").Subrouter()
 
 	//Post
 	unguardedRouter.HandleFunc("/login", userController.login).Methods(http.MethodPost)
 	unguardedRouter.HandleFunc("/register-admin", userController.registerAdmin).Methods(http.MethodPost)
 	guardedRouter.HandleFunc("/register-user", userController.registerUser).Methods(http.MethodPost)
-
 	// Get
 	guardedRouter.HandleFunc("/", userController.getAllUsers).Methods(http.MethodGet)
-	guardedRouter.HandleFunc("/{id}", userController.getUserById).Methods(http.MethodGet)
-
 	//Update
 	guardedRouter.HandleFunc("/{id}", userController.updateUserById).Methods(http.MethodPut)
-
 	// Delete
 	guardedRouter.HandleFunc("/{id}", userController.deleteUserById).Methods(http.MethodDelete)
-
 	guardedRouter.Use(security.MiddlewareAdmin)
+
+	//===================================
+
+	commonRouter.HandleFunc("/{id}", userController.getUserById).Methods(http.MethodGet)
+	commonRouter.Use(security.MiddlewareActive)
 }
 
 func (controller *UserController) registerAdmin(w http.ResponseWriter, r *http.Request) {

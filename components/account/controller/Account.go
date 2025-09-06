@@ -88,7 +88,7 @@ func (controller *AccountController) createAccount(w http.ResponseWriter, r *htt
 
 func (controller *AccountController) getAllUserAccounts(w http.ResponseWriter, r *http.Request) {
 
-	allAccounts := []account.AccountDTO{}
+	allAccounts := []account.AccontBankDTO{}
 	var totalCount int
 	query := r.URL.Query()
 
@@ -97,12 +97,12 @@ func (controller *AccountController) getAllUserAccounts(w http.ResponseWriter, r
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil || limit <= 0 {
-		limit = 5 //default
+		limit = 5
 	}
 
 	offset, err := strconv.Atoi(offsetStr)
 	if err != nil || offset < 0 {
-		offset = 0 //default
+		offset = 0
 	}
 
 	userID, err := security.ExtractUserIDFromToken(r)

@@ -16,20 +16,20 @@ type User struct {
 	IsAdmin      *bool                  `json:"isAdmin" gorm:"type:tinyint(1);default:false"`
 	IsActive     *bool                  `json:"isActive" gorm:"type:tinyint(1);default:true"`
 	TotalBalance float32                `json:"totalBalance" gorm:"type:float;DEFAULT:0"`
-	Credentials  *credential.Credential `json:"credential" gorm:"foreignKey:UserId;references:ID"`
-	// Accounts     []account.Account      `json:"accounts" gorm:"foreignKey:UserId;references:ID"`
+	Credentials  *credential.Credential `json:"credential"`
 }
 
 type UserDTO struct {
 	model.Base
-	FirstName    string                 `json:"firstName" example:"Ravi" gorm:"type:varchar(50)"`
-	LastName     string                 `json:"lastName" example:"Sharma" gorm:"type:varchar(50)"`
-	PhoneNo      string                 `sql:"index" json:"phoneNo" example:"9700795509" gorm:"type:varchar(15)"`
-	IsAdmin      *bool                  `json:"isAdmin" gorm:"type:tinyint(1);default:false"`
-	IsActive     *bool                  `json:"isActive" gorm:"type:tinyint(1);default:true"`
-	TotalBalance float32                `json:"totalBalance" gorm:"type:float;DEFAULT:0"`
-	Credentials  *credential.Credential `json:"credential" gorm:"foreignKey:UserId;references:ID"`
-	Accounts     []account.Account      `json:"accounts" gorm:"foreignKey:UserId;references:ID"`
+	FirstName    string                    `json:"firstName" example:"Ravi" gorm:"type:varchar(50)"`
+	LastName     string                    `json:"lastName" example:"Sharma" gorm:"type:varchar(50)"`
+	PhoneNo      string                    `sql:"index" json:"phoneNo" example:"9700795509" gorm:"type:varchar(15)"`
+	IsAdmin      *bool                     `json:"isAdmin" gorm:"type:tinyint(1);default:false"`
+	IsActive     *bool                     `json:"isActive" gorm:"type:tinyint(1);default:true"`
+	TotalBalance float32                   `json:"totalBalance" gorm:"type:float;DEFAULT:0"`
+	Credentials  *credential.CredentialDTO `json:"credential" gorm:"foreignKey:UserId;"`
+	Accounts     []account.AccontBankDTO   `json:"accounts" gorm:"foreignKey:UserId;"`
+	// Accounts     []account.AccountDTO   `json:"accounts" gorm:"foreignKey:UserId;references:ID"`
 }
 
 func (*UserDTO) TableName() string {

@@ -97,13 +97,13 @@ func (service *AccountService) CreateAccount(newAccount *account.Account) error 
 	return nil
 }
 
-func (service *AccountService) GetAllAccountsByUserID(userID uuid.UUID, allAccounts *[]account.AccountDTO, totalCount *int, limit, offset int) error {
+func (service *AccountService) GetAllAccountsByUserID(userID uuid.UUID, allAccounts *[]account.AccontBankDTO, totalCount *int, limit, offset int) error {
 	uow := repository.NewUnitOfWork(service.db, true)
 	defer uow.RollBack()
 
 	queryProcessor := []repository.QueryProcessor{
 		repository.Filter("user_id = ?", userID),
-		repository.PreloadAssociations([]string{"PassBook"}),
+		repository.PreloadAssociations([]string{"Bank"}),
 		repository.Paginate(limit, offset, totalCount),
 	}
 
@@ -112,7 +112,7 @@ func (service *AccountService) GetAllAccountsByUserID(userID uuid.UUID, allAccou
 		return err
 	}
 
-	err = service.repository.GetCount(uow, allAccounts, totalCount)
+	err = service.repository.GetCount(uow, allAccounts, totalCount, repository.Filter("user_id = ?", userID))
 	if err != nil {
 		return err
 	}

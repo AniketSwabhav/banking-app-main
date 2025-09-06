@@ -64,3 +64,26 @@ func MiddlewareUser(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+func MiddlewareActive(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		claim := Claims{}
+
+		err := ValidateToken(w, r, &claim)
+		if err != nil {
+			fmt.Println("err =>", err)
+			web.RespondError(w, errors.NewValidationError("Invalid or missing token"))
+			return
+		}
+
+		if !claim.IsActive {
+			fmt.Println("User is not Active")
+			web.RespondError(w, errors.NewInActiveUserError("Current user is not active"))
+			return
+		}
+
+		// Active user (admin or non-admin) passes
+		next.ServeHTTP(w, r)
+	})
+}

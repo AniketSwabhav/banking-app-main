@@ -18,9 +18,12 @@ type Credential struct {
 type CredentialDTO struct {
 	model.Base
 	Email    string    `json:"email" gorm:"unique;not null;type:varchar(36)"`
-	Password string    `json:"password" gorm:"not null;type:varchar(255)"`
-	UserID   uuid.UUID `json:"userId" gorm:"not null;type:varchar(36)"`
-	// user user.User `json:"user"`
+	Password string    `json:"-" gorm:"not null;type:varchar(255)"`
+	UserID   uuid.UUID `json:"-" gorm:"not null;type:varchar(36)"`
+}
+
+func (*CredentialDTO) TableName() string {
+	return "credentials"
 }
 
 func (user *Credential) Validate() error {

@@ -6,7 +6,6 @@ import (
 	"banking-app-be/components/security"
 	"banking-app-be/components/web"
 	"banking-app-be/model/account"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -40,18 +39,21 @@ func (Controller *AccountController) RegisterRoutes(router *mux.Router) {
 	guardedRouter.HandleFunc("/", Controller.getAllUserAccounts).Methods(http.MethodGet)
 	guardedRouter.HandleFunc("/{id}", Controller.getAccountByAccountID).Methods(http.MethodGet)
 
-	//Withdraw
-	guardedRouter.HandleFunc("/withdraw", Controller.withdrawFromAccount).Methods(http.MethodPost)
-
-	//Deposite
-	guardedRouter.HandleFunc("/deposite", Controller.depositetToAccount).Methods(http.MethodPost)
+	//Update
+	guardedRouter.HandleFunc("/{id}", Controller.updateAccountByAccountID).Methods(http.MethodPut)
 
 	//Delete
 	guardedRouter.HandleFunc("/{id}", Controller.deleteAccountByAccountID).Methods(http.MethodDelete)
 	guardedRouter.Use(security.MiddlewareUser)
 
+	//Withdraw
+	guardedRouter.HandleFunc("/{id}/withdraw", Controller.withdrawFromAccount).Methods(http.MethodPost)
+
+	//Deposite
+	guardedRouter.HandleFunc("/{id}/deposite", Controller.depositetToAccount).Methods(http.MethodPost)
+
 	//Transfer
-	guardedRouter.HandleFunc("/transfer", Controller.transfer).Methods(http.MethodPost)
+	guardedRouter.HandleFunc("/{id}/transfer", Controller.transfer).Methods(http.MethodPost)
 
 	guardedRouter.Use(security.MiddlewareUser)
 }
@@ -151,6 +153,41 @@ func (controller *AccountController) getAccountByAccountID(w http.ResponseWriter
 
 }
 
+func (controller *AccountController) updateAccountByAccountID(w http.ResponseWriter, r *http.Request) {
+	accountToUpdate := account.Account{}
+	parser := web.NewParser(r)
+
+	var err error
+
+	accountToUpdate.UpdatedBy, err = security.ExtractUserIDFromToken(r)
+	if err != nil {
+		web.RespondError(w, errors.NewHTTPError("Unauthorized", http.StatusUnauthorized))
+		return
+	}
+
+	accountToUpdate.ID, err = parser.GetUUID("id")
+	if err != nil {
+		web.RespondError(w, errors.NewValidationError("Invalid Account ID format"))
+		return
+	}
+	accountToUpdate.UserID = accountToUpdate.UpdatedBy
+
+	err = web.UnmarshalJSON(r, &accountToUpdate)
+	if err != nil {
+		web.RespondError(w, errors.NewHTTPError("unable to parse requested data", http.StatusBadRequest))
+		return
+	}
+
+	err = controller.AccountService.UpdateAccountById(&accountToUpdate)
+	if err != nil {
+		web.RespondError(w, err)
+		return
+	}
+
+	web.RespondJSON(w, http.StatusOK, accountToUpdate)
+
+}
+
 func (controller *AccountController) deleteAccountByAccountID(w http.ResponseWriter, r *http.Request) {
 
 	accountToDelete := account.Account{}
@@ -185,10 +222,11 @@ func (controller *AccountController) deleteAccountByAccountID(w http.ResponseWri
 func (controller *AccountController) withdrawFromAccount(w http.ResponseWriter, r *http.Request) {
 
 	accountToUpdate := account.Account{}
+	parser := web.NewParser(r)
 
 	var requestData struct {
-		AccountNo string  `json:"accountNo"`
-		Amount    float32 `json:"amount"`
+		// AccountNo string  `json:"accountNo"`
+		Amount float32 `json:"amount"`
 	}
 
 	err := web.UnmarshalJSON(r, &requestData)
@@ -197,7 +235,14 @@ func (controller *AccountController) withdrawFromAccount(w http.ResponseWriter, 
 		return
 	}
 
-	accountToUpdate.AccountNo = requestData.AccountNo
+	accountIDFromURL, err := parser.GetUUID("id")
+	if err != nil {
+		web.RespondError(w, errors.NewValidationError("Invalid Account ID format"))
+		return
+	}
+	accountToUpdate.ID = accountIDFromURL
+
+	// accountToUpdate.AccountNo = requestData.AccountNo
 
 	userID, err := security.ExtractUserIDFromToken(r)
 	if err != nil {
@@ -216,18 +261,17 @@ func (controller *AccountController) withdrawFromAccount(w http.ResponseWriter, 
 
 	web.RespondJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Withdrawal successful",
-		// "account_no":      accountToUpdate.AccountNo,
-		// "updated_balance": accountToUpdate.AccountBalance,
 	})
 }
 
 func (controller *AccountController) depositetToAccount(w http.ResponseWriter, r *http.Request) {
 
 	accountToUpdate := account.Account{}
+	parser := web.NewParser(r)
 
 	var requestData struct {
-		AccountNo string  `json:"accountNo"`
-		Amount    float32 `json:"amount"`
+		// AccountNo string  `json:"accountNo"`
+		Amount float32 `json:"amount"`
 	}
 
 	err := web.UnmarshalJSON(r, &requestData)
@@ -236,7 +280,14 @@ func (controller *AccountController) depositetToAccount(w http.ResponseWriter, r
 		return
 	}
 
-	accountToUpdate.AccountNo = requestData.AccountNo
+	accountIDFromURL, err := parser.GetUUID("id")
+	if err != nil {
+		web.RespondError(w, errors.NewValidationError("Invalid Account ID format"))
+		return
+	}
+	accountToUpdate.ID = accountIDFromURL
+
+	// accountToUpdate.AccountNo = requestData.AccountNo
 
 	userID, err := security.ExtractUserIDFromToken(r)
 	if err != nil {
@@ -255,8 +306,6 @@ func (controller *AccountController) depositetToAccount(w http.ResponseWriter, r
 
 	web.RespondJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Money Deposited successful",
-		// "account_no":      accountToUpdate.AccountNo,
-		// "updated_balance": accountToUpdate.AccountBalance,
 	})
 }
 
@@ -264,11 +313,12 @@ func (controller *AccountController) transfer(w http.ResponseWriter, r *http.Req
 
 	fromAccount := account.Account{}
 	toAccount := account.Account{}
+	parser := web.NewParser(r)
 
 	var requestData struct {
-		FromAccountNo string  `json:"fromAccountNo"`
-		ToAccountNo   string  `json:"toAccountNo"`
-		Amount        float32 `json:"amount"`
+		// FromAccountNo string  `json:"fromAccountNo"`
+		ToAccountNo string  `json:"toAccountNo"`
+		Amount      float32 `json:"amount"`
 	}
 
 	err := web.UnmarshalJSON(r, &requestData)
@@ -277,8 +327,15 @@ func (controller *AccountController) transfer(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	fromAccount.AccountNo = requestData.FromAccountNo
-	fmt.Println("from account number =======================>", fromAccount.AccountNo)
+	accountIDFromURL, err := parser.GetUUID("id")
+	if err != nil {
+		web.RespondError(w, errors.NewValidationError("Invalid Account ID format"))
+		return
+	}
+
+	// fromAccount.AccountNo = requestData.FromAccountNo
+	// fmt.Println("from account number =======================>", fromAccount.AccountNo)
+	fromAccount.ID = accountIDFromURL
 	toAccount.AccountNo = requestData.ToAccountNo
 
 	userID, err := security.ExtractUserIDFromToken(r)

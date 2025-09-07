@@ -130,13 +130,50 @@ func (service *AccountService) GetAccountByAccountID(accountToGet *account.Accou
 		return errors.NewNotFoundError("Account not found with given Id")
 	}
 
+	// tempAccount := account.Account{}
+	// if err := service.repository.GetRecord(uow, tempAccount, repository.Filter("id = ? AND user_id = ?", accountToGet.ID, accountToGet.UserID)); err != nil {
+	// 	return errors.NewNotFoundError("does not match accountId and UserId")
+	// }
+
+	// if tempAccount.UserID != accountToGet.UserID {
+	// 	return errors.NewUnauthorizedError("AccountId is not related to Current User")
+	// }
+
+	uow.Commit()
+	return nil
+}
+
+func (service *AccountService) UpdateAccountById(accountToUpdate *account.Account) error {
+
+	uow := repository.NewUnitOfWork(service.db, false)
+	defer uow.RollBack()
+
+	// if err := service.repository.GetRecordByID(uow, accountToUpdate.ID, &accountToUpdate); err != nil {
+	// 	return errors.NewNotFoundError("Account not found with given Id")
+	// }
+
 	tempAccount := account.Account{}
-	if err := service.repository.GetRecord(uow, tempAccount, repository.Filter("id = ? AND user_id = ?", accountToGet.ID, accountToGet.UserID)); err != nil {
-		return errors.NewNotFoundError("does not match accountId and UserId")
+	if err := service.repository.GetRecord(uow, &tempAccount, repository.Filter("id = ? AND user_id = ?", accountToUpdate.ID, accountToUpdate.UserID)); err != nil {
+		return errors.NewHTTPError("Account not found with given Account Number for Current User ", http.StatusNotFound)
 	}
 
-	if tempAccount.UserID != accountToGet.UserID {
-		return errors.NewUnauthorizedError("AccountId is not related to Current User")
+	accountOwner := user.User{}
+	if err := service.repository.GetRecordByID(uow, accountToUpdate.UserID, &accountOwner); err != nil {
+		return errors.NewInActiveUserError("cannot update the inactive users account")
+	}
+
+	// updateData := map[string]interface{}{
+	// 	"is_active":  false,
+	// 	"updated_by": accountToUpdate.DeletedBy,
+	// 	"updated_at": time.Now(),
+	// }
+	// if err := service.repository.UpdateWithMap(uow, &account.Account{}, updateData, repository.Filter("id = ? AND user_id = ?", accountToUpdate.ID, accountToUpdate.UserID)); err != nil {
+	// 	return err
+	// }
+
+	if err := service.repository.Update(uow, accountToUpdate); err != nil {
+		uow.RollBack()
+		return errors.NewDatabaseError("Unable to update user record")
 	}
 
 	uow.Commit()
@@ -162,7 +199,7 @@ func (service *AccountService) DeleteAccountById(accountToDelete *account.Accoun
 	}
 
 	updateData := map[string]interface{}{
-		"is_active":  false,
+		// "is_active":  false,
 		"deleted_by": accountToDelete.DeletedBy,
 		"deleted_at": time.Now(),
 	}
@@ -191,24 +228,28 @@ func (service *AccountService) Withdraw(accountToUpdate account.Account, amount 
 		return errors.NewInActiveUserError("InActive user can not withdraw money")
 	}
 
-	existingAccount := account.Account{}
-	if err := service.repository.GetRecord(uow, &existingAccount, repository.Filter("account_no = ? AND user_id = ?", accountToUpdate.AccountNo, accountToUpdate.UserID)); err != nil {
-		return errors.NewHTTPError("Account not found with given Account Number for Current User ", http.StatusNotFound)
+	// existingAccount := account.Account{}
+	// if err := service.repository.GetRecord(uow, &existingAccount, repository.Filter("account_no = ? AND user_id = ?", accountToUpdate.AccountNo, accountToUpdate.UserID)); err != nil {
+	// 	return errors.NewHTTPError("Account not found with given Account Number for Current User ", http.StatusNotFound)
+	// }
+
+	if err := service.repository.GetRecordByID(uow, accountToUpdate.ID, &accountToUpdate); err != nil {
+		return errors.NewDatabaseError("Unable to find account with provided Id")
 	}
 
 	bank := bank.Bank{}
-	if err := service.repository.GetRecordByID(uow, existingAccount.BankID, &bank); err != nil {
+	if err := service.repository.GetRecordByID(uow, accountToUpdate.BankID, &bank); err != nil {
 		return errors.NewNotFoundError("invalid bankid")
 	}
 	if !*bank.IsActive {
 		return errors.NewInActiveUserError("Can not withdraw money from InActive Bank")
 	}
 
-	if existingAccount.AccountBalance < float32(amount) {
+	if accountToUpdate.AccountBalance < float32(amount) {
 		return errors.NewValidationError("Insufficient balance")
 	}
 
-	accountToUpdate.AccountBalance = existingAccount.AccountBalance - amount
+	accountToUpdate.AccountBalance = accountToUpdate.AccountBalance - amount
 
 	transaction := passbook.Transaction{
 		TimeStamp:      time.Now(),
@@ -216,7 +257,7 @@ func (service *AccountService) Withdraw(accountToUpdate account.Account, amount 
 		Amount:         -float32(amount),
 		AccountBalance: accountToUpdate.AccountBalance,
 		Note:           "Withdrawal transaction",
-		AccountID:      existingAccount.ID,
+		AccountID:      accountToUpdate.ID,
 	}
 	if err := service.repository.Add(uow, transaction); err != nil {
 		return errors.NewDatabaseError("Failed to record transaction")
@@ -227,6 +268,9 @@ func (service *AccountService) Withdraw(accountToUpdate account.Account, amount 
 		"updated_by":      accountToUpdate.UpdatedBy,
 		"updated_at":      time.Now(),
 	}
+	// if err := service.repository.UpdateWithMap(uow, &account.Account{}, updateData, repository.Filter("account_no = ? AND user_id = ?", accountToUpdate.AccountNo, accountToUpdate.UserID)); err != nil {
+	// 	return err
+	// }
 	if err := service.repository.UpdateWithMap(uow, &account.Account{}, updateData, repository.Filter("account_no = ? AND user_id = ?", accountToUpdate.AccountNo, accountToUpdate.UserID)); err != nil {
 		return err
 	}
@@ -263,20 +307,24 @@ func (service *AccountService) Deposite(accountToUpdate account.Account, amount 
 		return errors.NewInActiveUserError("InActive user can not withdraw money")
 	}
 
-	existingAccount := account.Account{}
-	if err := service.repository.GetRecord(uow, &existingAccount, repository.Filter("account_no = ? AND user_id = ?", accountToUpdate.AccountNo, accountToUpdate.UserID)); err != nil {
-		return errors.NewHTTPError("Account not found with given Account Number for Current User ", http.StatusNotFound)
+	// existingAccount := account.Account{}
+	// if err := service.repository.GetRecord(uow, &existingAccount, repository.Filter("account_no = ? AND user_id = ?", accountToUpdate.AccountNo, accountToUpdate.UserID)); err != nil {
+	// 	return errors.NewHTTPError("Account not found with given Account Number for Current User ", http.StatusNotFound)
+	// }
+
+	if err := service.repository.GetRecordByID(uow, accountToUpdate.ID, &accountToUpdate); err != nil {
+		return errors.NewDatabaseError("Unable to find account with provided Id")
 	}
 
 	bank := bank.Bank{}
-	if err := service.repository.GetRecordByID(uow, existingAccount.BankID, &bank); err != nil {
+	if err := service.repository.GetRecordByID(uow, accountToUpdate.BankID, &bank); err != nil {
 		return errors.NewNotFoundError("invalid bankid")
 	}
 	if !*bank.IsActive {
 		return errors.NewInActiveUserError("Can not withdraw money from InActive Bank")
 	}
 
-	accountToUpdate.AccountBalance = existingAccount.AccountBalance + amount
+	accountToUpdate.AccountBalance = accountToUpdate.AccountBalance + amount
 
 	transaction := passbook.Transaction{
 		TimeStamp:      time.Now(),
@@ -284,7 +332,7 @@ func (service *AccountService) Deposite(accountToUpdate account.Account, amount 
 		Amount:         +float32(amount),
 		AccountBalance: accountToUpdate.AccountBalance,
 		Note:           "Deposite transaction",
-		AccountID:      existingAccount.ID,
+		AccountID:      accountToUpdate.ID,
 	}
 	if err := service.repository.Add(uow, transaction); err != nil {
 		return errors.NewDatabaseError("Failed to record transaction")
@@ -324,7 +372,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 		return errors.NewValidationError("deposite amount must be positive")
 	}
 
-	//-------------------------
+	//-------------------------sender user check
 	senderAccountOwner := user.User{}
 	if err := service.repository.GetRecordByID(uow, fromAccount.UserID, &senderAccountOwner); err != nil {
 		return errors.NewNotFoundError("Account owner not found")
@@ -332,11 +380,15 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 	if !*senderAccountOwner.IsActive {
 		return errors.NewInActiveUserError("InActive user can not transfer money")
 	}
-	if err := service.repository.GetRecord(uow, &fromAccount, repository.Filter("account_no = ? AND user_id = ?", fromAccount.AccountNo, fromAccount.UserID)); err != nil {
-		return errors.NewHTTPError("user can only transfer money from its own acount", http.StatusNotFound)
+	// if err := service.repository.GetRecord(uow, &fromAccount, repository.Filter("account_no = ? AND user_id = ?", fromAccount.AccountNo, fromAccount.UserID)); err != nil {
+	// 	return errors.NewHTTPError("user can only transfer money from its own acount", http.StatusNotFound)
+	// }
+
+	//-------------------------sender account check
+	if err := service.repository.GetRecordByID(uow, fromAccount.ID, &fromAccount); err != nil {
+		return errors.NewDatabaseError("Unable to find account with provided id")
 	}
 
-	//-------------------------
 	if !*fromAccount.IsActive {
 		return errors.NewValidationError("Money can only be sent from active bank account")
 	}
@@ -345,7 +397,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 		return errors.NewValidationError("Insufficient balance")
 	}
 
-	//-------------------------
+	//-------------------------sender bank check
 	senderBank := bank.Bank{}
 	if err := service.repository.GetRecordByID(uow, fromAccount.BankID, &senderBank); err != nil {
 		return errors.NewNotFoundError("sender bank not found")
@@ -354,6 +406,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 		return errors.NewInActiveUserError("Can not Transfer money from InActive Bank")
 	}
 
+	//------------------------update sender account balance
 	fromAccount.AccountBalance -= amount
 	senderAccountData := map[string]interface{}{
 		"account_balance": fromAccount.AccountBalance,
@@ -364,18 +417,20 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 		return errors.NewDatabaseError("failed to update sender account balance")
 	}
 
+	//-----------------------sender passbook entry
 	senderTransaction := passbook.Transaction{
 		TimeStamp:      time.Now(),
 		Type:           "Transfer",
 		Amount:         -float32(amount),
 		AccountBalance: fromAccount.AccountBalance,
-		Note:           fmt.Sprintf("%0.2f transferred from %s to %s", amount, fromAccount.AccountNo, toAccount.AccountNo),
+		Note:           fmt.Sprintf("%0.2f transferred to %s", amount, toAccount.AccountNo),
 		AccountID:      fromAccount.ID,
 	}
 	if err := service.repository.Add(uow, senderTransaction); err != nil {
 		return errors.NewDatabaseError("Failed to record sender transaction")
 	}
 
+	//------------------------update sender total balance
 	senderAccountOwner.TotalBalance -= amount
 	senderAccountOwnerData := map[string]interface{}{
 		"total_balance": senderAccountOwner.TotalBalance,
@@ -386,7 +441,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 		return errors.NewDatabaseError("failed to update total balance of sender user")
 	}
 
-	//-------------------------
+	//-------------------------receiver account check
 	if err := service.repository.GetRecord(uow, &toAccount, repository.Filter("account_no = ?", toAccount.AccountNo)); err != nil {
 		return errors.NewNotFoundError("receiver account not found with given accoutn number")
 	}
@@ -394,7 +449,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 		return errors.NewValidationError("Money can only be sent to active bank account")
 	}
 
-	//-------------------------
+	//-------------------------receiver user check
 	receiverAccountOwner := user.User{}
 	if err := service.repository.GetRecordByID(uow, toAccount.UserID, &receiverAccountOwner); err != nil {
 		return errors.NewNotFoundError("receiver account owner not found.")
@@ -403,7 +458,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 		return errors.NewValidationError("Money could not be sent to InActive user")
 	}
 
-	//-------------------------
+	//-------------------------receiver bank check
 	receiverBank := bank.Bank{}
 	if err := service.repository.GetRecordByID(uow, toAccount.BankID, &receiverBank); err != nil {
 		return errors.NewNotFoundError("receiver bank not found")
@@ -412,7 +467,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 		return errors.NewInActiveUserError("Can not Transfer money to InActive Bank")
 	}
 
-	//-------------------------
+	//-------------------------update receiver account balance
 	toAccount.AccountBalance += amount
 	receiverAccountData := map[string]interface{}{
 		"account_balance": toAccount.AccountBalance,
@@ -423,18 +478,20 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 		return errors.NewDatabaseError("failed to update receiver account balance")
 	}
 
+	//------------------------receiver passbook entry
 	receiverTransaction := passbook.Transaction{
 		TimeStamp:      time.Now(),
 		Type:           "Receive",
 		Amount:         +float32(amount),
 		AccountBalance: toAccount.AccountBalance,
-		Note:           fmt.Sprintf("%0.2f received to %s from %s ", amount, toAccount.AccountNo, fromAccount.AccountNo),
+		Note:           fmt.Sprintf("%0.2f received from %s ", amount, fromAccount.AccountNo),
 		AccountID:      toAccount.ID,
 	}
 	if err := service.repository.Add(uow, receiverTransaction); err != nil {
 		return errors.NewDatabaseError("Failed to record receiver transaction")
 	}
 
+	//-----------------------update reciver total balance
 	receiverAccountOwner.TotalBalance += amount
 	receiverAccountOwnerData := map[string]interface{}{
 		"total_balance": receiverAccountOwner.TotalBalance,
@@ -445,7 +502,7 @@ func (service *AccountService) Transfer(fromAccount, toAccount account.Account, 
 		return errors.NewDatabaseError("failed to update total balance of receiver user")
 	}
 
-	//-------------------------
+	//-------------------------ledger check
 	if fromAccount.BankID != toAccount.BankID {
 		bankTransfer := banktransaction.BankTransaction{
 			SenderBankID:   fromAccount.BankID,

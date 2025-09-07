@@ -199,7 +199,7 @@ func (controller *BankController) deleteBankById(w http.ResponseWriter, r *http.
 }
 
 func (controller *BankController) settlement(w http.ResponseWriter, r *http.Request) {
-	ledger := []banktransaction.BankTransaction{}
+	ledger := []banktransaction.BankTransactionDTO{}
 	var totalCount int
 
 	userID, err := security.ExtractUserIDFromToken(r)

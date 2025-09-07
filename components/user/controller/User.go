@@ -201,25 +201,18 @@ func (controller *UserController) updateUserById(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// err = controller.UserService.UpdateUser(&userToUpdate)
-	// if err != nil {
-	// 	controller.log.Print(err.Error())
-	// 	web.RespondError(w, err)
-	// 	return
-	// }
-
 	err = web.UnmarshalJSON(r, &userToUpdate)
 	if err != nil {
 		web.RespondError(w, errors.NewHTTPError("unable to parse requested data", http.StatusBadRequest))
 		return
 	}
 
-	err = userToUpdate.Validate()
-	if err != nil {
-		controller.log.Error(err.Error())
-		web.RespondError(w, err)
-		return
-	}
+	// err = userToUpdate.Validate()
+	// if err != nil {
+	// 	controller.log.Error(err.Error())
+	// 	web.RespondError(w, err)
+	// 	return
+	// }
 
 	err = controller.UserService.NormalUpdate(&userToUpdate)
 	if err != nil {

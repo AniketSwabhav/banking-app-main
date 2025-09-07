@@ -7,6 +7,7 @@ import (
 	banktransaction "banking-app-be/model/bankTransaction"
 	"banking-app-be/model/user"
 	"banking-app-be/module/repository"
+	"fmt"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -131,23 +132,26 @@ func (service *BankService) DeleteBank(bankToDelete *bank.Bank) error {
 	return nil
 }
 
-func (service *BankService) Settlement(userId uuid.UUID, ledger *[]banktransaction.BankTransaction, totalCount *int) error {
+func (service *BankService) Settlement(userId uuid.UUID, ledger *[]banktransaction.BankTransactionDTO, totalCount *int) error {
 	uow := repository.NewUnitOfWork(service.db, true)
 	defer uow.RollBack()
 
+	// Verify user is admin and active
 	adminUser := user.User{}
 	if err := service.repository.GetRecordByID(uow, userId, &adminUser); err != nil {
 		return err
 	}
-	if !*adminUser.IsAdmin || !*adminUser.IsActive {
+	if adminUser.IsAdmin == nil || !*adminUser.IsAdmin || adminUser.IsActive == nil || !*adminUser.IsActive {
 		return errors.NewValidationError("Only active admin users can access settlement records")
 	}
 
+	// Fetch all transactions
 	allTransactions := []banktransaction.BankTransaction{}
 	if err := service.repository.GetAll(uow, &allTransactions); err != nil {
 		return errors.NewDatabaseError("Unable to fetch bank transaction entries")
 	}
 
+	// Build pairwise ledger
 	pairwise := make(map[uuid.UUID]map[uuid.UUID]float32)
 	for _, tx := range allTransactions {
 		if _, exists := pairwise[tx.SenderBankID]; !exists {
@@ -157,7 +161,7 @@ func (service *BankService) Settlement(userId uuid.UUID, ledger *[]banktransacti
 	}
 
 	processed := make(map[string]bool)
-	netSettlements := []banktransaction.BankTransaction{}
+	netSettlements := []banktransaction.BankTransactionDTO{}
 
 	for fromBank, toMap := range pairwise {
 		for toBank, amountFromTo := range toMap {
@@ -172,13 +176,13 @@ func (service *BankService) Settlement(userId uuid.UUID, ledger *[]banktransacti
 			net := amountFromTo - amountToFrom
 
 			if net > 0 {
-				netSettlements = append(netSettlements, banktransaction.BankTransaction{
+				netSettlements = append(netSettlements, banktransaction.BankTransactionDTO{
 					SenderBankID:   toBank,
 					ReceiverBankID: fromBank,
 					Amount:         net,
 				})
 			} else if net < 0 {
-				netSettlements = append(netSettlements, banktransaction.BankTransaction{
+				netSettlements = append(netSettlements, banktransaction.BankTransactionDTO{
 					SenderBankID:   fromBank,
 					ReceiverBankID: toBank,
 					Amount:         -net,
@@ -188,6 +192,25 @@ func (service *BankService) Settlement(userId uuid.UUID, ledger *[]banktransacti
 			processed[pairKey] = true
 			processed[reversePairKey] = true
 		}
+	}
+
+	// Load bank names for each settlement
+	for i, tx := range netSettlements {
+		// Load Sender Bank Name
+		senderBank := banktransaction.SenderBankName{}
+		if err := service.repository.GetRecordByID(uow, tx.SenderBankID, &senderBank); err != nil {
+			return fmt.Errorf("failed to load sender bank name: %w", err)
+		}
+		tx.SenderBank = senderBank
+
+		// Load Receiver Bank Name
+		receiverBank := banktransaction.ReceiverBankName{}
+		if err := service.repository.GetRecordByID(uow, tx.ReceiverBankID, &receiverBank); err != nil {
+			return fmt.Errorf("failed to load receiver bank name: %w", err)
+		}
+		tx.ReceiverBank = receiverBank
+
+		netSettlements[i] = tx
 	}
 
 	*ledger = netSettlements

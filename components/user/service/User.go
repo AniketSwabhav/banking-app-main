@@ -50,6 +50,9 @@ func (service *UserService) CreateAdmin(newUser *user.User) error {
 		return err
 	}
 
+	if newUser.IsAdmin == nil {
+		newUser.IsAdmin = new(bool)
+	}
 	*newUser.IsAdmin = true
 
 	hashedPassword, err := hashPassword(newUser.Credentials.Password)
@@ -253,34 +256,39 @@ func (service *UserService) NormalUpdate(userToUpdate *user.User) error {
 	uow := repository.NewUnitOfWork(service.db, false)
 	defer uow.RollBack()
 
-	fmt.Printf("userToupdate %+v", userToUpdate)
+	userToUpdate.Credentials = &credential.Credential{}
+	if err := service.repository.GetRecord(uow, &userToUpdate.Credentials, repository.Filter("user_id = ?", userToUpdate.ID)); err != nil {
+		return errors.NewDatabaseError("unable to get credentials")
+	}
+
+	fmt.Println("credentails======================>", *userToUpdate.Credentials)
 	if err := service.repository.Update(uow, userToUpdate); err != nil {
 		uow.RollBack()
 		return errors.NewDatabaseError("Unable to update user record")
 	}
 
-	if userToUpdate.Credentials != nil {
-		cred := userToUpdate.Credentials
+	// if userToUpdate.Credentials != nil {
+	// 	cred := userToUpdate.Credentials
 
-		if err := cred.Validate(); err != nil {
-			uow.RollBack()
-			return err
-		}
+	// 	if err := cred.Validate(); err != nil {
+	// 		uow.RollBack()
+	// 		return err
+	// 	}
 
-		if cred.Password != "" {
-			hashedPassword, err := hashPassword(cred.Password)
-			if err != nil {
-				uow.RollBack()
-				return errors.NewValidationError("Failed to hash password")
-			}
-			userToUpdate.Credentials.Password = string(hashedPassword)
-		}
+	// 	if cred.Password != "" {
+	// 		hashedPassword, err := hashPassword(cred.Password)
+	// 		if err != nil {
+	// 			uow.RollBack()
+	// 			return errors.NewValidationError("Failed to hash password")
+	// 		}
+	// 		userToUpdate.Credentials.Password = string(hashedPassword)
+	// 	}
 
-		if err := service.repository.Update(uow, cred, repository.Filter("user_id = ?", userToUpdate.ID)); err != nil {
-			uow.RollBack()
-			errors.NewDatabaseError("Unable to update the user credentials")
-		}
-	}
+	// 	if err := service.repository.Update(uow, cred, repository.Filter("user_id = ?", userToUpdate.ID)); err != nil {
+	// 		uow.RollBack()
+	// 		errors.NewDatabaseError("Unable to update the user credentials")
+	// 	}
+	// }
 
 	uow.Commit()
 	return nil
